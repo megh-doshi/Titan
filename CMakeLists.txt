@@ -166,7 +166,7 @@ find_package(glm CONFIG REQUIRED) # glm
 if (glm_FOUND)
     message(STATUS "GLM FOUND")
     target_include_directories(Titan PRIVATE ${glm_INCLUDE_DIRS})
-    target_link_libraries(Titan PRIVATE ${glm_LIBRARIES} glm)
+    target_link_libraries(Titan PRIVATE ${glm_LIBRARIES} glm::glm)
     set(Titan_INCLUDE_DIRS ${Titan_INCLUDE_DIRS} ${glm_INCLUDE_DIRS})
     set(Titan_LIBRARIES ${Titan_LIBRARIES} ${glm_LIBRARIES})
 endif()
