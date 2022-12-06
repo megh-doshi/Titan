@@ -28,7 +28,7 @@
 
 namespace titan {
 
-#define MAX_BLOCKS 256 // max number of CUDA blocks
+#define MAX_BLOCKS 65535 // max number of CUDA blocks
 #define THREADS_PER_BLOCK 1024
 
 #ifndef GRAPHICS
