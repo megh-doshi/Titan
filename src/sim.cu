@@ -19,6 +19,9 @@
 #include <cuda_gl_interop.h>
 #include <exception>
 
+//ADD LIBRARY FOR TIMING
+#include <chrono>
+
 namespace titan {
 
 #ifdef GRAPHICS
@@ -1582,10 +1585,39 @@ void Simulation::execute() {
         gpuErrchk( cudaPeekAtLastError() );
         T += 0.5 * dt;
 #else
+        //compute time taken by kernel
+        cudaEvent_t start, stop;
+        cudaEventCreate(&start);
+        cudaEventCreate(&stop);
+        cudaEventRecord(start, 0);
+
         computeSpringForces<<<springBlocksPerGrid, THREADS_PER_BLOCK>>>(d_spring, springs.size(), T); // compute mass forces after syncing
+
+        //stop timer
+        cudaEventRecord(stop,0);
+        cudaEventSynchronize(stop);
+
+        float time;
+        cudaEventElapsedTime(&time, start, stop);
+        std::cout << "Spring Compute Kernel: " << time << " ms" << std::endl;
+
         gpuErrchk( cudaPeekAtLastError() );
 
+        cudaEvent_t start, stop;
+        cudaEventCreate(&start);
+        cudaEventCreate(&stop);
+        cudaEventRecord(start, 0);
+
         massForcesAndUpdate<<<massBlocksPerGrid, THREADS_PER_BLOCK>>>(d_mass, masses.size(), dt, T, _global_acc, d_constraints);
+
+        //stop timer
+        cudaEventRecord(stop,0);
+        cudaEventSynchronize(stop);
+
+        float time1;
+        cudaEventElapsedTime(&time1, start, stop);
+        std::cout << "Mass update Kernel: " << time1 << " ms" << std::endl;
+
         gpuErrchk( cudaPeekAtLastError() );
         T += dt;
 #endif
