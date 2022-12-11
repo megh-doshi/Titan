@@ -1590,8 +1590,17 @@ void Simulation::execute() {
         cudaEventCreate(&start);
         cudaEventCreate(&stop);
         cudaEventRecord(start, 0);
+
+
         computeSpringForces<<<springBlocksPerGrid, THREADS_PER_BLOCK>>>(d_spring, springs.size(), T); // compute mass forces after syncing
+        cudaEventRecord(stop,0);
+        cudaEventSynchronize(stop);
+        float time;
+        cudaEventElapsedTime(&time, start, stop);
+        std::cout << time << std::endl;
+
         gpuErrchk( cudaPeekAtLastError() );
+
 
         massForcesAndUpdate<<<massBlocksPerGrid, THREADS_PER_BLOCK>>>(d_mass, masses.size(), dt, T, _global_acc, d_constraints);
         gpuErrchk( cudaPeekAtLastError() );
