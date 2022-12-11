@@ -26,7 +26,6 @@
 #include "object.h"
 #include "vec.h"
 
-
 namespace titan {
 
 #define MAX_BLOCKS 65535 // max number of CUDA blocks
