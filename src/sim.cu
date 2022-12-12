@@ -1597,7 +1597,7 @@ void Simulation::execute() {
         cudaEventSynchronize(stop);
         float time;
         cudaEventElapsedTime(&time, start, stop);
-        std::cout << time << std::endl;
+        std::cout << "Copmute Spring Forces Kernel:" << time << std::endl;
 
         gpuErrchk( cudaPeekAtLastError() );
 

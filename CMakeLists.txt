@@ -6,6 +6,8 @@ project("Titan"
 
 set(CMAKE_CXX_STANDARD 14) # set C++ standard to C++11
 
+set(CMAKE_CUDA_FLAGS "-Xcompiler -O3 -Xcompiler -Wall -Xptxas -O3 -std=c++17 -G")
+
 option(TITAN_BUILD_TESTS "Enable unit tests to be built." OFF)
 option(TITAN_SHARED_BUILD "Enables shared library build (static by default)" OFF)
 option(GRAPHICS "Enables Titan OpenGL graphics support" ON)
