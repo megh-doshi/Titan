@@ -4,7 +4,7 @@ project("Titan"
         DESCRIPTION "CUDA physics simulator for soft robotics and reinforcement learning"
         LANGUAGES C CXX CUDA)
 
-set(CMAKE_CUDA_FLAGS "-Xcompiler -O3 -Xptxas -Wall -std=c++17 -G")
+set(CMAKE_CUDA_FLAGS "-Xcompiler -O3 -Wall -std=c++17 -G")
 
 set(CMAKE_CXX_STANDARD 14) # set C++ standard to C++11
 
