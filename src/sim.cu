@@ -1076,26 +1076,23 @@ __global__ void computeSpringForces(CUDA_SPRING ** d_spring, int num_springs, do
 
 #ifdef CONSTRAINTS
         if (spring._right -> constraints.fixed == false) {
-//            spring._right->force.atomicVecAdd(force); // need atomics here
+            spring._right->force.atomicVecAdd(force); // need atomics here
 //            spring._right -> force.VecAdd(force);
-            spring._right -> force += force;
+//            spring._right -> force += force;
         }
         if (spring._left -> constraints.fixed == false) {
-//            spring._left->force.atomicVecAdd(-force);
+            spring._left->force.atomicVecAdd(-force);
 //            spring._left -> force.VecAdd(-force);
-            spring._left -> force -= force;
+//            spring._left -> force -= force;
         }
 
 
 #else
-//        spring._right -> force.atomicVecAdd(force);
-//        spring._left -> force.atomicVecAdd(-force);
+        spring._right -> force.atomicVecAdd(force);
+        spring._left -> force.atomicVecAdd(-force);
 
 //        spring._right -> force.VecAdd(force);
 //        spring._left -> force.VecAdd(-force);
-
-            spring._right -> force += force;
-            spring._left -> force -= force;
 #endif
 
     }
