@@ -36,6 +36,12 @@ atomicDoubleAdd(&data[1], (double) v.data[1]);
 atomicDoubleAdd(&data[2], (double) v.data[2]);
 }
 
+CUDA_DEVICE void Vec::VecAdd(const Vec & v) {
+    data[0] += v.data[0];
+    data[1] += v.data[1];
+    data[2] += v.data[2];
+}
+
 CUDA_CALLABLE_MEMBER double dot(const Vec & a, const Vec & b) {
     return (a * b).sum();
 }

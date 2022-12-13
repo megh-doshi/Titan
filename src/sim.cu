@@ -1047,7 +1047,14 @@ __global__ void printSpring(CUDA_SPRING ** d_springs, int num_springs) {
 }
 
 __global__ void computeSpringForces(CUDA_SPRING ** d_spring, int num_springs, double t) {
+
+    // use shared memory to compute spring forces
+    // each thread computes the force on one mass
+    // each block computes the force on one spring
+    // each block has 2 threads, one for each mass
+
     int i = blockDim.x * blockIdx.x + threadIdx.x;
+
 
     if ( i < num_springs ) {
         CUDA_SPRING & spring = *d_spring[i];
@@ -1069,14 +1076,20 @@ __global__ void computeSpringForces(CUDA_SPRING ** d_spring, int num_springs, do
 
 #ifdef CONSTRAINTS
         if (spring._right -> constraints.fixed == false) {
-            spring._right->force.atomicVecAdd(force); // need atomics here
+//            spring._right->force.atomicVecAdd(force); // need atomics here
+            spring._right -> force.VecAdd(force);
         }
         if (spring._left -> constraints.fixed == false) {
-            spring._left->force.atomicVecAdd(-force);
+//            spring._left->force.atomicVecAdd(-force);
+            spring._left -> force.VecAdd(-force);
         }
+
 #else
-        spring._right -> force.atomicVecAdd(force);
-        spring._left -> force.atomicVecAdd(-force);
+//        spring._right -> force.atomicVecAdd(force);
+//        spring._left -> force.atomicVecAdd(-force);
+
+        spring._right -> force.VecAdd(force);
+        spring._left -> force.VecAdd(-force);
 #endif
 
     }
