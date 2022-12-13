@@ -1052,9 +1052,42 @@ __global__ void computeSpringForces(CUDA_SPRING ** d_spring, int num_springs, do
     // each thread computes the force on one mass
     // each block computes the force on one spring
     // each block has 2 threads, one for each mass
+    extern __shared__ float shMemArray[];
 
     int i = blockDim.x * blockIdx.x + threadIdx.x;
 
+    if (i < num_springs) {
+        CUDA_SPRING data = *d_spring[i];
+
+        Vec left = data._left -> pos;
+        Vec right = data._right -> pos;
+
+        Vec diff = left - right;
+        double dist = diff.norm();
+
+        Vec force = diff * (data._k * (dist - data._rest) / dist);
+
+        if (threadIdx.x == 0) {
+            shMemArray[0] = force[0];
+            shMemArray[1] = force[1];
+            shMemArray[2] = force[2];
+        } else {
+            shMemArray[3] = force[0];
+            shMemArray[4] = force[1];
+            shMemArray[5] = force[2];
+        }
+
+        __syncthreads();
+
+        if (threadIdx.x == 0) {
+            atomicAdd(&data._left -> force[0], shMemArray[0]);
+            atomicAdd(&data._left -> force[1], shMemArray[1]);
+            atomicAdd(&data._left -> force[2], shMemArray[2]);
+
+            atomicAdd(&data._right -> force[0], shMemArray[3]);
+            atomicAdd(&data._right -> force[1], shMemArray[4]);
+            atomicAdd(&data._right -> force[2], shMemArray[5]);
+        }
 
     if ( i < num_springs ) {
         CUDA_SPRING & spring = *d_spring[i];
