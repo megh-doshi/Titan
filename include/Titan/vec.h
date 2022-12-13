@@ -84,6 +84,8 @@ public:
 
     CUDA_DEVICE void atomicVecAdd(const Vec & v);
 
+    CUDA_DEVICE void VecAdd(const Vec & v);
+
     CUDA_CALLABLE_MEMBER Vec operator-() const{
         return Vec(-data[0], -data[1], -data[2]);
     }
