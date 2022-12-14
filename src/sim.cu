@@ -1048,16 +1048,21 @@ Vec Simulation::up;
         // each thread computes the force on one mass
         // each block computes the force on one spring
         // each block has 2 threads, one for each mass
+        __shared__ CUDA_SPRING spring_data[];
 
         int i = blockDim.x * blockIdx.x + threadIdx.x;
 
-
+        // each thread copies the data for one spring to shared memory
+        spring_data[threadIdx.x] = *d_spring[i];
+        __syncthreads();
         if ( i < num_springs ) {
             CUDA_SPRING & spring = *d_spring[i];
 
-            if (spring._left == nullptr || spring._right == nullptr || ! spring._left -> valid || ! spring._right -> valid) // TODO might be expensive with CUDA instruction set
-                return;
+//            if (spring._left == nullptr || spring._right == nullptr || ! spring._left -> valid || ! spring._right -> valid) // TODO might be expensive with CUDA instruction set
+//                return;
 
+            if (spring_data[i]._left == nullptr || spring_data[i]._right == nullptr || ! spring_data[i]._left -> valid || ! spring_data[i]._right -> valid)
+                return;
             Vec temp = (spring._right -> pos) - (spring._left -> pos);
 
             double scale = 1.0;
@@ -1585,13 +1590,13 @@ void Simulation::moveViewport(const Vec & displacement) {
             cudaDeviceSynchronize(); // synchronize before updating the springs and mass positions
 
 #ifdef RK2
-            computeSpringForces<<<springBlocksPerGrid, THREADS_PER_BLOCK>>>(d_spring, springs.size(), T); // compute mass forces after syncing
+            computeSpringForces<<<springBlocksPerGrid, THREADS_PER_BLOCK, 72>>>(d_spring, springs.size(), T); // compute mass forces after syncing
         gpuErrchk( cudaPeekAtLastError() );
         massForcesAndUpdate<true><<<massBlocksPerGrid, THREADS_PER_BLOCK>>>(d_mass, masses.size(), dt, T, _global_acc, d_constraints);
         gpuErrchk( cudaPeekAtLastError() );
         T += 0.5 * dt;
 
-        computeSpringForces<<<springBlocksPerGrid, THREADS_PER_BLOCK>>>(d_spring, springs.size(), T); // compute mass forces after syncing
+        computeSpringForces<<<springBlocksPerGrid, THREADS_PER_BLOCK, 72>>>(d_spring, springs.size(), T); // compute mass forces after syncing
         gpuErrchk( cudaPeekAtLastError() );
         massForcesAndUpdate<false><<<massBlocksPerGrid, THREADS_PER_BLOCK>>>(d_mass, masses.size(), dt, T, _global_acc, d_constraints);
         gpuErrchk( cudaPeekAtLastError() );
@@ -1604,7 +1609,7 @@ void Simulation::moveViewport(const Vec & displacement) {
             cudaEventRecord(start, 0);
 
 
-            computeSpringForces<<<springBlocksPerGrid, THREADS_PER_BLOCK>>>(d_spring, springs.size(), T); // compute mass forces after syncing
+            computeSpringForces<<<springBlocksPerGrid, THREADS_PER_BLOCK, 72>>>(d_spring, springs.size(), T); // compute mass forces after syncing
             cudaEventRecord(stop,0);
             cudaEventSynchronize(stop);
             float time;
