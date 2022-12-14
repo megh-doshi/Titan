@@ -1046,60 +1046,101 @@ __global__ void printSpring(CUDA_SPRING ** d_springs, int num_springs) {
     }
 }
 
-__global__ void computeSpringForces(CUDA_SPRING ** d_spring, int num_springs, double t) {
+//__global__ void computeSpringForces(CUDA_SPRING ** d_spring, int num_springs, double t) {
+//
+//    // use shared memory to compute spring forces
+//    // each thread computes the force on one mass
+//    // each block computes the force on one spring
+//    // each block has 2 threads, one for each mass
+////    extern __shared__ float shMemArray[];
+//
+//    int i = blockDim.x * blockIdx.x + threadIdx.x;
+//
+//    if ( i < num_springs ) {
+//        CUDA_SPRING & spring = *d_spring[i];
+//
+//        if (spring._left == nullptr || spring._right == nullptr || ! spring._left -> valid || ! spring._right -> valid) // TODO might be expensive with CUDA instruction set
+//            return;
+//
+//        Vec temp = (spring._right -> pos) - (spring._left -> pos);
+//
+//        double scale = 1.0;
+//        if (spring._type == ACTIVE_CONTRACT_THEN_EXPAND){
+//            scale = (1 - 0.2 * sin(spring._omega * t));
+//        } else if (spring._type == ACTIVE_EXPAND_THEN_CONTRACT){
+//            scale = (1 + 0.2 * sin(spring._omega * t));
+//	    }
+//
+//        Vec force = spring._k * (spring._rest * scale - temp.norm()) * (temp / temp.norm()); // normal spring force
+//        force += dot(spring._left -> vel - spring._right -> vel, temp / temp.norm()) * spring._damping * (temp / temp.norm()); // damping
+//
+//#ifdef CONSTRAINTS
+//        if (spring._right -> constraints.fixed == false) {
+//            spring._right->force.atomicVecAdd(force); // need atomics here
+////            spring._right -> force.VecAdd(force);
+////            spring._right -> force += force;
+//        }
+//        if (spring._left -> constraints.fixed == false) {
+//            spring._left->force.atomicVecAdd(-force);
+////            spring._left -> force.VecAdd(-force);
+////            spring._left -> force -= force;
+//        }
+//
+//
+//#else
+//        spring._right -> force.atomicVecAdd(force);
+//        spring._left -> force.atomicVecAdd(-force);
+//
+////        spring._right -> force.VecAdd(force);
+////        spring._left -> force.VecAdd(-force);
+//
+////        spring._right -> force += force;
+////        spring._left -> force -= force;
+//#endif
+//
+//    }
+//}
 
-    // use shared memory to compute spring forces
-    // each thread computes the force on one mass
-    // each block computes the force on one spring
-    // each block has 2 threads, one for each mass
-//    extern __shared__ float shMemArray[];
+    __global__ void computeSpringForces(CUDA_SPRING ** d_spring, int num_springs, double t) {
+        __shared__ Vec forces[256];
 
-    int i = blockDim.x * blockIdx.x + threadIdx.x;
+        int i = blockDim.x * blockIdx.x + threadIdx.x;
 
-    if ( i < num_springs ) {
-        CUDA_SPRING & spring = *d_spring[i];
+        if ( i < num_springs ) {
+            CUDA_SPRING & spring = *d_spring[i];
 
-        if (spring._left == nullptr || spring._right == nullptr || ! spring._left -> valid || ! spring._right -> valid) // TODO might be expensive with CUDA instruction set
-            return;
+            if (spring._left == nullptr || spring._right == nullptr || ! spring._left -> valid || ! spring._right -> valid)
+                return;
 
-        Vec temp = (spring._right -> pos) - (spring._left -> pos);
+            Vec temp = (spring._right -> pos) - (spring._left -> pos);
 
-        double scale = 1.0;
-        if (spring._type == ACTIVE_CONTRACT_THEN_EXPAND){
-            scale = (1 - 0.2 * sin(spring._omega * t));
-        } else if (spring._type == ACTIVE_EXPAND_THEN_CONTRACT){
-            scale = (1 + 0.2 * sin(spring._omega * t));
-	    }
+            double scale = 1.0;
+            if (spring._type == ACTIVE_CONTRACT_THEN_EXPAND){
+                scale = (1 - 0.2 * sin(spring._omega * t));
+            } else if (spring._type == ACTIVE_EXPAND_THEN_CONTRACT){
+                scale = (1 + 0.2 * sin(spring._omega * t));
+            }
 
-        Vec force = spring._k * (spring._rest * scale - temp.norm()) * (temp / temp.norm()); // normal spring force
-        force += dot(spring._left -> vel - spring._right -> vel, temp / temp.norm()) * spring._damping * (temp / temp.norm()); // damping
+            Vec force = spring._k * (spring._rest * scale - temp.norm()) * (temp / temp.norm()); // normal spring force
+            force += dot(spring._left -> vel - spring._right -> vel, temp / temp.norm()) * spring._damping * (temp / temp.norm()); // damping
+
+            forces[threadIdx.x] = force;
+            __syncthreads();
 
 #ifdef CONSTRAINTS
-        if (spring._right -> constraints.fixed == false) {
-            spring._right->force.atomicVecAdd(force); // need atomics here
-//            spring._right -> force.VecAdd(force);
-//            spring._right -> force += force;
+            if (spring._right -> constraints.fixed == false) {
+            spring._right->force += forces[threadIdx.x];
         }
         if (spring._left -> constraints.fixed == false) {
-            spring._left->force.atomicVecAdd(-force);
-//            spring._left -> force.VecAdd(-force);
-//            spring._left -> force -= force;
+            spring._left->force -= forces[threadIdx.x];
         }
-
-
 #else
-        spring._right -> force.atomicVecAdd(force);
-        spring._left -> force.atomicVecAdd(-force);
-
-//        spring._right -> force.VecAdd(force);
-//        spring._left -> force.VecAdd(-force);
-
-//        spring._right -> force += force;
-//        spring._left -> force -= force;
+            spring._right -> force += forces[threadIdx.x];
+            spring._left -> force -= forces[threadIdx.x];
 #endif
-
+        }
     }
-}
+
 
 double Simulation::time() {
     return this -> T;
