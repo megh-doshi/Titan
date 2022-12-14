@@ -1142,41 +1142,50 @@ __global__ void printSpring(CUDA_SPRING ** d_springs, int num_springs) {
 //    }
 
     __global__ void computeSpringForces(CUDA_SPRING ** d_spring, int num_springs, double t) {
+        // Declare shared memory for the spring and temporary vectors
         __shared__ CUDA_SPRING spring;
         __shared__ Vec temp, force;
 
+        // Each thread will handle one spring
         int i = blockDim.x * blockIdx.x + threadIdx.x;
 
         if ( i < num_springs ) {
-            spring[threadIdx.x] = *d_spring[i];
+            // Load the spring data into shared memory
+            spring = *d_spring[i];
 
-            if (spring[threadIdx.x]._left == nullptr || spring[threadIdx.x]._right == nullptr || ! spring[threadIdx.x]._left -> valid || ! spring[threadIdx.x]._right -> valid) // TODO might be expensive with CUDA instruction set
+            // Skip this spring if one of the particles is invalid or null
+            if (spring._left == nullptr || spring._right == nullptr || ! spring._left -> valid || ! spring._right -> valid)
                 return;
 
-            temp = (spring[threadIdx.x]._right -> pos) - (spring[threadIdx.x]._left -> pos);
+            // Calculate the distance between the particles
+            temp = (spring._right -> pos) - (spring._left -> pos);
 
+            // Calculate the scale factor for the spring's resting length
             double scale = 1.0;
-            if (spring[threadIdx.x]._type == ACTIVE_CONTRACT_THEN_EXPAND){
-                scale = (1 - 0.2 * sin(spring[threadIdx.x]._omega * t));
-            } else if (spring[threadIdx.x]._type == ACTIVE_EXPAND_THEN_CONTRACT){
-                scale = (1 + 0.2 * sin(spring[threadIdx.x]._omega * t));
+            if (spring._type == ACTIVE_CONTRACT_THEN_EXPAND){
+                scale = (1 - 0.2 * sin(spring._omega * t));
+            } else if (spring._type == ACTIVE_EXPAND_THEN_CONTRACT){
+                scale = (1 + 0.2 * sin(spring._omega * t));
             }
 
-            force = spring[threadIdx.x]._k * (spring[threadIdx.x]._rest * scale - temp.norm()) * (temp / temp.norm()); // normal spring force
-            force += dot(spring[threadIdx.x]._left -> vel - spring[threadIdx.x]._right -> vel, temp / temp.norm()) * spring[threadIdx.x]._damping * (temp / temp.norm()); // damping
+            // Calculate the spring force
+            force = spring._k * (spring._rest * scale - temp.norm()) * (temp / temp.norm()); // normal spring force
+            force += dot(spring._left -> vel - spring._right -> vel, temp / temp.norm()) * spring._damping * (temp / temp.norm()); // damping
 
-            if (spring[threadIdx.x]._right -> constraints.fixed == false) {
-                spring[threadIdx.x]._right->force += force;
+            // Add the force to the particles
+            if (spring._right -> constraints.fixed == false) {
+                spring._right->force += force;
             }
-            if (spring[threadIdx.x]._left -> constraints.fixed == false) {
-                spring[threadIdx.x]._left->force -= force;
+            if (spring._left -> constraints.fixed == false) {
+                spring._left->force -= force;
             }
         }
     }
 
 
 
-double Simulation::time() {
+
+    double Simulation::time() {
     return this -> T;
 }
 
