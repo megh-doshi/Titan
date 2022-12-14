@@ -1048,19 +1048,19 @@ Vec Simulation::up;
         // each thread computes the force on one mass
         // each block computes the force on one spring
         // each block has 2 threads, one for each mass
-//        __shared__ CUDA_SPRING spring_data[2];
+        __shared__ CUDA_SPRING spring_data[2];
 //
 //
 //
-//        int num_springs_to_process = min(num_springs - blockIdx.x * blockDim.x, blockDim.x);
+        int num_springs_to_process = min(num_springs - blockIdx.x * blockDim.x, blockDim.x);
 //
-//        // copy the required data from global memory to shared memory
-//        for (int i = threadIdx.x; i < num_springs_to_process; i += blockDim.x) {
-//            spring_data[i] = *d_spring[blockIdx.x * blockDim.x + i];
-//        }
+        // copy the required data from global memory to shared memory
+        for (int i = threadIdx.x; i < num_springs_to_process; i += blockDim.x) {
+            spring_data[i] = *d_spring[blockIdx.x * blockDim.x + i];
+        }
 //
 //        // synchronize the threads in the block
-//        __syncthreads();
+        __syncthreads();
         int i = blockDim.x * blockIdx.x + threadIdx.x;
         if ( i < num_springs ) {
             CUDA_SPRING & spring = *d_spring[i];
