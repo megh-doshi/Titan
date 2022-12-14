@@ -1066,11 +1066,11 @@ Vec Simulation::up;
         if ( i < num_springs ) {
             CUDA_SPRING & spring = *d_spring[i];
 
-            if (spring._left == nullptr || spring._right == nullptr || ! spring._left -> valid || ! spring._right -> valid) // TODO might be expensive with CUDA instruction set
-                return;
-
-//            if (spring_data[i]._left == nullptr || spring_data[i]._right == nullptr || ! spring_data[i]._left -> valid || ! spring_data[i]._right -> valid)
+//            if (spring._left == nullptr || spring._right == nullptr || ! spring._left -> valid || ! spring._right -> valid) // TODO might be expensive with CUDA instruction set
 //                return;
+
+            if (spring_data[threadIdx.x]._left == nullptr || spring_data[threadIdx.x]._right == nullptr || ! spring_data[threadIdx.x]._left -> valid || ! spring_data[threadIdx.x]._right -> valid)
+                return;
             Vec temp = (spring._right -> pos) - (spring._left -> pos);
 
             double scale = 1.0;
