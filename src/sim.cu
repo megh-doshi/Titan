@@ -1142,7 +1142,7 @@ __global__ void printSpring(CUDA_SPRING ** d_springs, int num_springs) {
 //    }
 
     __global__ void computeSpringForces(CUDA_SPRING ** d_spring, int num_springs, double t) {
-        // Declare shared memory for the spring and temporary vectors
+
         __shared__ CUDA_SPRING spring;
         __shared__ Vec temp, force;
 
@@ -1166,21 +1166,19 @@ __global__ void printSpring(CUDA_SPRING ** d_springs, int num_springs) {
             force = spring._k * (spring._rest * scale - temp.norm()) * (temp / temp.norm()); // normal spring force
             force += dot(spring._left -> vel - spring._right -> vel, temp / temp.norm()) * spring._damping * (temp / temp.norm()); // damping
 
-            __shared__ Vec shared_force;
-            atomicAdd(&shared_force, force);
-            __syncthreads();
-
+            //use atomicCAS
             if (spring._right -> constraints.fixed == false) {
-                spring._right->force += shared_force;
+                int oldValue = atomicCAS(&spring._right->force, spring._right->force, spring._right->force + force);
+                if (oldValue == spring._right->force)
+                    spring._right->force += force;
             }
             if (spring._left -> constraints.fixed == false) {
-                spring._left->force -= shared_force;
+                int oldValue = atomicCAS(&spring._left->force, spring._left->force, spring._left->force - force);
+                if (oldValue == spring._left->force)
+                    spring._left->force -= force;
             }
-        }
+
     }
-
-
-
 
 
     double Simulation::time() {
