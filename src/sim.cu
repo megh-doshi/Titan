@@ -1686,7 +1686,7 @@ void Simulation::execute() {
         cudaEventRecord(start, 0);
 
 
-        computeSpringForces<<<springBlocksPerGrid, THREADS_PER_BLOCK>>>(d_spring, springs.size(), T); // compute mass forces after syncing
+        computeSpringForces<<<springBlocksPerGrid, THREADS_PER_BLOCK,THREADS_PER_BLOCK*sizeof(d_spring)>>>(d_spring, springs.size(), T); // compute mass forces after syncing
         cudaEventRecord(stop,0);
         cudaEventSynchronize(stop);
         float time;
