@@ -1071,17 +1071,17 @@ Vec Simulation::up;
 
             if (spring_data[threadIdx.x]._left == nullptr || spring_data[threadIdx.x]._right == nullptr || ! spring_data[threadIdx.x]._left -> valid || ! spring_data[threadIdx.x]._right -> valid)
                 return;
-            Vec temp = (spring._right -> pos) - (spring._left -> pos);
+            Vec temp = (spring_data[threadIdx.x]._right -> pos) - (spring_data[threadIdx.x]._left -> pos);
 
             double scale = 1.0;
-            if (spring._type == ACTIVE_CONTRACT_THEN_EXPAND){
-                scale = (1 - 0.2 * sin(spring._omega * t));
-            } else if (spring._type == ACTIVE_EXPAND_THEN_CONTRACT){
-                scale = (1 + 0.2 * sin(spring._omega * t));
+            if (spring_data[threadIdx.x]._type == ACTIVE_CONTRACT_THEN_EXPAND){
+                scale = (1 - 0.2 * sin(spring_data[threadIdx.x]._omega * t));
+            } else if (spring_data[threadIdx.x]._type == ACTIVE_EXPAND_THEN_CONTRACT){
+                scale = (1 + 0.2 * sin(spring_data[threadIdx.x]._omega * t));
             }
 
-            Vec force = spring._k * (spring._rest * scale - temp.norm()) * (temp / temp.norm()); // normal spring force
-            force += dot(spring._left -> vel - spring._right -> vel, temp / temp.norm()) * spring._damping * (temp / temp.norm()); // damping
+            Vec force = spring_data[threadIdx.x]._k * (spring_data[threadIdx.x]._rest * scale - temp.norm()) * (temp / temp.norm()); // normal spring force
+            force += dot(spring_data[threadIdx.x]._left -> vel - spring_data[threadIdx.x]._right -> vel, temp / temp.norm()) * spring_data[threadIdx.x]._damping * (temp / temp.norm()); // damping
 
 #ifdef CONSTRAINTS
             if (spring._right -> constraints.fixed == false) {
@@ -1089,6 +1089,7 @@ Vec Simulation::up;
 //            spring._right -> force.VecAdd(force);
 //            spring._right -> force += force;
         }
+        if (spring._left -> constraints.fixed == false) {
         if (spring._left -> constraints.fixed == false) {
             spring._left->force.atomicVecAdd(-force);
 //            spring._left -> force.VecAdd(-force);
