@@ -1048,7 +1048,7 @@ Vec Simulation::up;
         // each thread computes the force on one mass
         // each block computes the force on one spring
         // each block has 2 threads, one for each mass
-        __shared__ CUDA_SPRING ** spring_data[];
+        __shared__ CUDA_SPRING spring_data[2];
 
         int i = blockDim.x * blockIdx.x + threadIdx.x;
 
@@ -1590,13 +1590,13 @@ void Simulation::moveViewport(const Vec & displacement) {
             cudaDeviceSynchronize(); // synchronize before updating the springs and mass positions
 
 #ifdef RK2
-            computeSpringForces<<<springBlocksPerGrid, THREADS_PER_BLOCK, 72>>>(d_spring, springs.size(), T); // compute mass forces after syncing
+            computeSpringForces<<<springBlocksPerGrid, THREADS_PER_BLOCK, 144>>>(d_spring, springs.size(), T); // compute mass forces after syncing
         gpuErrchk( cudaPeekAtLastError() );
         massForcesAndUpdate<true><<<massBlocksPerGrid, THREADS_PER_BLOCK>>>(d_mass, masses.size(), dt, T, _global_acc, d_constraints);
         gpuErrchk( cudaPeekAtLastError() );
         T += 0.5 * dt;
 
-        computeSpringForces<<<springBlocksPerGrid, THREADS_PER_BLOCK, 72>>>(d_spring, springs.size(), T); // compute mass forces after syncing
+        computeSpringForces<<<springBlocksPerGrid, THREADS_PER_BLOCK, 144>>>(d_spring, springs.size(), T); // compute mass forces after syncing
         gpuErrchk( cudaPeekAtLastError() );
         massForcesAndUpdate<false><<<massBlocksPerGrid, THREADS_PER_BLOCK>>>(d_mass, masses.size(), dt, T, _global_acc, d_constraints);
         gpuErrchk( cudaPeekAtLastError() );
@@ -1609,7 +1609,7 @@ void Simulation::moveViewport(const Vec & displacement) {
             cudaEventRecord(start, 0);
 
 
-            computeSpringForces<<<springBlocksPerGrid, THREADS_PER_BLOCK, 72>>>(d_spring, springs.size(), T); // compute mass forces after syncing
+            computeSpringForces<<<springBlocksPerGrid, THREADS_PER_BLOCK, 144>>>(d_spring, springs.size(), T); // compute mass forces after syncing
             cudaEventRecord(stop,0);
             cudaEventSynchronize(stop);
             float time;
