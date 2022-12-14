@@ -1089,7 +1089,7 @@ Vec Simulation::up;
 //            spring._right -> force.VecAdd(force);
 //            spring._right -> force += force;
         }
-        if (spring._left -> constraints.fixed == false) {
+
         if (spring._left -> constraints.fixed == false) {
             spring._left->force.atomicVecAdd(-force);
 //            spring._left -> force.VecAdd(-force);
