@@ -1146,21 +1146,16 @@ __global__ void printSpring(CUDA_SPRING ** d_springs, int num_springs) {
         __shared__ CUDA_SPRING spring;
         __shared__ Vec temp, force;
 
-        // Each thread will handle one spring
         int i = blockDim.x * blockIdx.x + threadIdx.x;
 
         if ( i < num_springs ) {
-            // Load the spring data into shared memory
             spring = *d_spring[i];
 
-            // Skip this spring if one of the particles is invalid or null
-            if (spring._left == nullptr || spring._right == nullptr || ! spring._left -> valid || ! spring._right -> valid)
+            if (spring._left == nullptr || spring._right == nullptr || ! spring._left -> valid || ! spring._right -> valid) // TODO might be expensive with CUDA instruction set
                 return;
 
-            // Calculate the distance between the particles
             temp = (spring._right -> pos) - (spring._left -> pos);
 
-            // Calculate the scale factor for the spring's resting length
             double scale = 1.0;
             if (spring._type == ACTIVE_CONTRACT_THEN_EXPAND){
                 scale = (1 - 0.2 * sin(spring._omega * t));
@@ -1168,19 +1163,22 @@ __global__ void printSpring(CUDA_SPRING ** d_springs, int num_springs) {
                 scale = (1 + 0.2 * sin(spring._omega * t));
             }
 
-            // Calculate the spring force
             force = spring._k * (spring._rest * scale - temp.norm()) * (temp / temp.norm()); // normal spring force
             force += dot(spring._left -> vel - spring._right -> vel, temp / temp.norm()) * spring._damping * (temp / temp.norm()); // damping
 
-            // Add the force to the particles
+            __shared__ Vec shared_force;
+            atomicAdd(&shared_force, force);
+            __syncthreads();
+
             if (spring._right -> constraints.fixed == false) {
-                spring._right->force += force;
+                spring._right->force += shared_force;
             }
             if (spring._left -> constraints.fixed == false) {
-                spring._left->force -= force;
+                spring._left->force -= shared_force;
             }
         }
     }
+
 
 
 
