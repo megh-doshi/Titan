@@ -1101,18 +1101,59 @@ __global__ void printSpring(CUDA_SPRING ** d_springs, int num_springs) {
 //    }
 //}
 
+//    __global__ void computeSpringForces(CUDA_SPRING ** d_spring, int num_springs, double t) {
+//        __shared__ Vec forces[256];
+//
+//        int i = blockDim.x * blockIdx.x + threadIdx.x;
+//
+//        if ( i < num_springs ) {
+//            CUDA_SPRING & spring = *d_spring[i];
+//
+//            if (spring._left == nullptr || spring._right == nullptr || ! spring._left -> valid || ! spring._right -> valid)
+//                return;
+//
+//            Vec temp = (spring._right -> pos) - (spring._left -> pos);
+//
+//            double scale = 1.0;
+//            if (spring._type == ACTIVE_CONTRACT_THEN_EXPAND){
+//                scale = (1 - 0.2 * sin(spring._omega * t));
+//            } else if (spring._type == ACTIVE_EXPAND_THEN_CONTRACT){
+//                scale = (1 + 0.2 * sin(spring._omega * t));
+//            }
+//
+//            Vec force = spring._k * (spring._rest * scale - temp.norm()) * (temp / temp.norm()); // normal spring force
+//            force += dot(spring._left -> vel - spring._right -> vel, temp / temp.norm()) * spring._damping * (temp / temp.norm()); // damping
+//
+//            forces[threadIdx.x] = force;
+//            __syncthreads();
+//
+//#ifdef CONSTRAINTS
+//            if (spring._right -> constraints.fixed == false) {
+//            spring._right->force += forces[threadIdx.x];
+//        }
+//        if (spring._left -> constraints.fixed == false) {
+//            spring._left->force -= forces[threadIdx.x];
+//        }
+//#else
+//            spring._right -> force += forces[threadIdx.x];
+//            spring._left -> force -= forces[threadIdx.x];
+//#endif
+//        }
+//    }
+
     __global__ void computeSpringForces(CUDA_SPRING ** d_spring, int num_springs, double t) {
-        __shared__ Vec forces[256];
+        __shared__ CUDA_SPRING spring;
+        __shared__ Vec temp, force;
 
         int i = blockDim.x * blockIdx.x + threadIdx.x;
 
         if ( i < num_springs ) {
-            CUDA_SPRING & spring = *d_spring[i];
+            spring = *d_spring[i];
 
-            if (spring._left == nullptr || spring._right == nullptr || ! spring._left -> valid || ! spring._right -> valid)
+            if (spring._left == nullptr || spring._right == nullptr || ! spring._left -> valid || ! spring._right -> valid) // TODO might be expensive with CUDA instruction set
                 return;
 
-            Vec temp = (spring._right -> pos) - (spring._left -> pos);
+            temp = (spring._right -> pos) - (spring._left -> pos);
 
             double scale = 1.0;
             if (spring._type == ACTIVE_CONTRACT_THEN_EXPAND){
@@ -1121,25 +1162,18 @@ __global__ void printSpring(CUDA_SPRING ** d_springs, int num_springs) {
                 scale = (1 + 0.2 * sin(spring._omega * t));
             }
 
-            Vec force = spring._k * (spring._rest * scale - temp.norm()) * (temp / temp.norm()); // normal spring force
+            force = spring._k * (spring._rest * scale - temp.norm()) * (temp / temp.norm()); // normal spring force
             force += dot(spring._left -> vel - spring._right -> vel, temp / temp.norm()) * spring._damping * (temp / temp.norm()); // damping
 
-            forces[threadIdx.x] = force;
-            __syncthreads();
-
-#ifdef CONSTRAINTS
             if (spring._right -> constraints.fixed == false) {
-            spring._right->force += forces[threadIdx.x];
-        }
-        if (spring._left -> constraints.fixed == false) {
-            spring._left->force -= forces[threadIdx.x];
-        }
-#else
-            spring._right -> force += forces[threadIdx.x];
-            spring._left -> force -= forces[threadIdx.x];
-#endif
+                spring._right->force += force;
+            }
+            if (spring._left -> constraints.fixed == false) {
+                spring._left->force -= force;
+            }
         }
     }
+
 
 
 double Simulation::time() {
