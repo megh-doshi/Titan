@@ -1051,17 +1051,17 @@ Vec Simulation::up;
         __shared__ CUDA_SPRING spring_data[2];
 //
 //
-//
-        int num_springs_to_process = min(num_springs - blockIdx.x * blockDim.x, blockDim.x);
+        int i = blockDim.x * blockIdx.x + threadIdx.x;
+//        int num_springs_to_process = min(num_springs - blockIdx.x * blockDim.x, blockDim.x);
 //
         // copy the required data from global memory to shared memory
-        for (int i = threadIdx.x; i < num_springs_to_process; i += blockDim.x) {
-            spring_data[i] = *d_spring[blockIdx.x * blockDim.x + i];
-        }
+//        for (int i = threadIdx.x; i < num_springs_to_process; i += blockDim.x) {
+        spring_data[i] = *d_spring[i];
+//        }
 //
 //        // synchronize the threads in the block
         __syncthreads();
-        int i = blockDim.x * blockIdx.x + threadIdx.x;
+
         if ( i < num_springs ) {
             CUDA_SPRING & spring = *d_spring[i];
 
