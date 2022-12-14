@@ -1048,28 +1048,28 @@ Vec Simulation::up;
         // each thread computes the force on one mass
         // each block computes the force on one spring
         // each block has 2 threads, one for each mass
-        __shared__ CUDA_SPRING spring_data[2];
-
-
-
-        int num_springs_to_process = min(num_springs - blockIdx.x * blockDim.x, blockDim.x);
-
-        // copy the required data from global memory to shared memory
-        for (int i = threadIdx.x; i < num_springs_to_process; i += blockDim.x) {
-            spring_data[i] = *d_spring[blockIdx.x * blockDim.x + i];
-        }
-
-        // synchronize the threads in the block
-        __syncthreads();
+//        __shared__ CUDA_SPRING spring_data[2];
+//
+//
+//
+//        int num_springs_to_process = min(num_springs - blockIdx.x * blockDim.x, blockDim.x);
+//
+//        // copy the required data from global memory to shared memory
+//        for (int i = threadIdx.x; i < num_springs_to_process; i += blockDim.x) {
+//            spring_data[i] = *d_spring[blockIdx.x * blockDim.x + i];
+//        }
+//
+//        // synchronize the threads in the block
+//        __syncthreads();
         int i = blockDim.x * blockIdx.x + threadIdx.x;
         if ( i < num_springs ) {
             CUDA_SPRING & spring = *d_spring[i];
 
-//            if (spring._left == nullptr || spring._right == nullptr || ! spring._left -> valid || ! spring._right -> valid) // TODO might be expensive with CUDA instruction set
-//                return;
-
-            if (spring_data[i]._left == nullptr || spring_data[i]._right == nullptr || ! spring_data[i]._left -> valid || ! spring_data[i]._right -> valid)
+            if (spring._left == nullptr || spring._right == nullptr || ! spring._left -> valid || ! spring._right -> valid) // TODO might be expensive with CUDA instruction set
                 return;
+
+//            if (spring_data[i]._left == nullptr || spring_data[i]._right == nullptr || ! spring_data[i]._left -> valid || ! spring_data[i]._right -> valid)
+//                return;
             Vec temp = (spring._right -> pos) - (spring._left -> pos);
 
             double scale = 1.0;
