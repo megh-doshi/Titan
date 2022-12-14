@@ -1,7 +1,3 @@
-//
-// Created by Jacob Austin on 5/17/18.
-//
-
 #include "sim.h"
 #include "stlparser.h"
 
@@ -25,25 +21,25 @@
 namespace titan {
 
 #ifdef GRAPHICS
-#ifndef SDL2
+    #ifndef SDL2
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 #endif
 #endif
 
-__global__ void createSpringPointers(CUDA_SPRING ** ptrs, CUDA_SPRING * data, int size);
-__global__ void createMassPointers(CUDA_MASS ** ptrs, CUDA_MASS * data, int size);
+    __global__ void createSpringPointers(CUDA_SPRING ** ptrs, CUDA_SPRING * data, int size);
+    __global__ void createMassPointers(CUDA_MASS ** ptrs, CUDA_MASS * data, int size);
 
-__global__ void computeSpringForces(CUDA_SPRING ** device_springs, int num_springs, double t);
-__global__ void massForcesAndUpdate(CUDA_MASS ** d_mass, int num_masses, double dt, double T, Vec global_acc, CUDA_GLOBAL_CONSTRAINTS c);
+    __global__ void computeSpringForces(CUDA_SPRING ** device_springs, int num_springs, double t);
+    __global__ void massForcesAndUpdate(CUDA_MASS ** d_mass, int num_masses, double dt, double T, Vec global_acc, CUDA_GLOBAL_CONSTRAINTS c);
 
-bool Simulation::RUNNING;
-bool Simulation::STARTED;
-bool Simulation::ENDED;
-bool Simulation::FREED;
-bool Simulation::GPU_DONE;
+    bool Simulation::RUNNING;
+    bool Simulation::STARTED;
+    bool Simulation::ENDED;
+    bool Simulation::FREED;
+    bool Simulation::GPU_DONE;
 
 #ifdef GRAPHICS
-GLFWwindow * Simulation::window;
+    GLFWwindow * Simulation::window;
 GLuint Simulation::VertexArrayID;
 GLuint Simulation::programID;
 GLuint Simulation::MatrixID;
@@ -62,34 +58,34 @@ Vec Simulation::up;
 #endif
 
 #define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
-inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=false)
-{
-    if (code != cudaSuccess)
+    inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=false)
     {
-        fprintf(stderr,"GPUassert: %d %s %s %d\n", code, cudaGetErrorString(code), file, line);
+        if (code != cudaSuccess)
+        {
+            fprintf(stderr,"GPUassert: %d %s %s %d\n", code, cudaGetErrorString(code), file, line);
 
-        if (abort) {
-            char buffer[200];
-            snprintf(buffer, sizeof(buffer), "GPUassert error in CUDA kernel: %s %s %d\n", cudaGetErrorString(code), file, line);
-            std::string buffer_string = buffer;
-            throw std::runtime_error(buffer_string);
+            if (abort) {
+                char buffer[200];
+                snprintf(buffer, sizeof(buffer), "GPUassert error in CUDA kernel: %s %s %d\n", cudaGetErrorString(code), file, line);
+                std::string buffer_string = buffer;
+                throw std::runtime_error(buffer_string);
+            }
         }
     }
-}
 
-Simulation::Simulation() {
-    dt = 0.0001;
-    RUNNING = false;
-    STARTED = false;
-    ENDED = false;
-    FREED = false;
-    GPU_DONE = false;
+    Simulation::Simulation() {
+        dt = 0.0001;
+        RUNNING = false;
+        STARTED = false;
+        ENDED = false;
+        FREED = false;
+        GPU_DONE = false;
 
-    update_constraints = true;
-    _global_acc = Vec(0, 0, -9.81);
+        update_constraints = true;
+        _global_acc = Vec(0, 0, -9.81);
 
 #ifdef GRAPHICS
-    resize_buffers = true;
+        resize_buffers = true;
     update_colors = true;
     update_indices = true;
 
@@ -100,25 +96,25 @@ Simulation::Simulation() {
     looks_at = Vec(0, 0, 2);
     up = Vec(0, 0, 1);
 #endif
-}
+    }
 
-void Simulation::reset() {
-    this -> masses.clear();
-    this -> springs.clear();
-    this -> containers.clear();
-    this -> constraints.clear();
+    void Simulation::reset() {
+        this -> masses.clear();
+        this -> springs.clear();
+        this -> containers.clear();
+        this -> constraints.clear();
 
-    RUNNING = false;
-    STARTED = false;
-    ENDED = false;
-    FREED = false;
-    GPU_DONE = false;
+        RUNNING = false;
+        STARTED = false;
+        ENDED = false;
+        FREED = false;
+        GPU_DONE = false;
 
-    update_constraints = true;
-    _global_acc = Vec(0, 0, -9.81);
+        update_constraints = true;
+        _global_acc = Vec(0, 0, -9.81);
 
 #ifdef GRAPHICS
-    resize_buffers = true;
+        resize_buffers = true;
     update_colors = true;
     update_indices = true;
 
@@ -129,42 +125,42 @@ void Simulation::reset() {
     looks_at = Vec(0, 0, 2);
     up = Vec(0, 0, 1);
 #endif
-}
+    }
 
-void Simulation::freeGPU() {
-    for (Spring * s : springs) {
-        if (s -> _left && ! s -> _left -> valid) {
-            if (s -> _left -> arrayptr) {
-                gpuErrchk(cudaFree(s -> _left -> arrayptr));
+    void Simulation::freeGPU() {
+        for (Spring * s : springs) {
+            if (s -> _left && ! s -> _left -> valid) {
+                if (s -> _left -> arrayptr) {
+                    gpuErrchk(cudaFree(s -> _left -> arrayptr));
+                }
+
+                delete s -> _left;
             }
 
-            delete s -> _left;
-        }
+            if (s -> _right && ! s -> _right -> valid) {
+                if (s -> _right -> arrayptr) {
+                    gpuErrchk(cudaFree(s -> _right -> arrayptr));
+                }
 
-        if (s -> _right && ! s -> _right -> valid) {
-            if (s -> _right -> arrayptr) {
-                gpuErrchk(cudaFree(s -> _right -> arrayptr));
+                delete s -> _right;
             }
 
-            delete s -> _right;
+            delete s;
         }
 
-        delete s;
-    }
+        for (Mass * m : masses) {
+            delete m;
+        }
 
-    for (Mass * m : masses) {
-        delete m;
-    }
+        for (Container * c : containers) {
+            delete c;
+        }
 
-    for (Container * c : containers) {
-        delete c;
-    }
+        d_balls.clear();
+        d_balls.shrink_to_fit();
 
-    d_balls.clear();
-    d_balls.shrink_to_fit();
-
-    d_planes.clear();
-    d_planes.shrink_to_fit();
+        d_planes.clear();
+        d_planes.shrink_to_fit();
 
 //    freeSprings<<<springBlocksPerGrid, THREADS_PER_BLOCK>>>(d_spring, springs.size()); // MUST COME BEFORE freeMasses
 //    freeMasses<<<massBlocksPerGrid, THREADS_PER_BLOCK>>>(d_mass, masses.size());
@@ -179,391 +175,391 @@ void Simulation::freeGPU() {
 //     cudaGLUnregisterBufferObject(this -> vertices);
 // #endif
 
-    FREED = true; // just to be safe
-    ENDED = true; // just to be safe
-}
+        FREED = true; // just to be safe
+        ENDED = true; // just to be safe
+    }
 
-Simulation::~Simulation() {
-    std::cerr << "Simulation destructor called." << std::endl;
+    Simulation::~Simulation() {
+        std::cerr << "Simulation destructor called." << std::endl;
 
-    if (STARTED) {
-        waitForEvent();
+        if (STARTED) {
+            waitForEvent();
 
-        ENDED = true; // TODO maybe race condition
+            ENDED = true; // TODO maybe race condition
 
-        while (!GPU_DONE) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        }
+            while (!GPU_DONE) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(10)); // TODO fix race condition
+            std::this_thread::sleep_for(std::chrono::milliseconds(10)); // TODO fix race condition
 
-        if (gpu_thread.joinable()) {
-            gpu_thread.join();
+            if (gpu_thread.joinable()) {
+                gpu_thread.join();
+            } else {
+                std::cout << "could not join GPU thread." << std::endl;
+                exit(1);
+            }
+
+            if (!FREED) {
+                freeGPU();
+                FREED = true;
+            }
         } else {
-            std::cout << "could not join GPU thread." << std::endl;
-            exit(1);
+            for (Mass * m : masses) {
+                delete m;
+            }
+
+            for (Spring * s : springs) {
+                delete s;
+            }
+
+            for (Container * c : containers) {
+                delete c;
+            }
+        }
+    }
+
+    Mass * Simulation::createMass(Mass * m) {
+        if (ENDED) {
+            throw std::runtime_error("The simulation has ended. Cannot modify simulation after the end of the simulation.");
         }
 
-        if (!FREED) {
-            freeGPU();
-            FREED = true;
+        m -> ref_count++;
+
+        if (!STARTED) {
+            masses.push_back(m);
+            return m;
+        } else {
+            if (RUNNING) {
+                throw std::runtime_error("The simulation is running. Stop the simulation to make changes.");
+            }
+
+            masses.push_back(m);
+
+            CUDA_MASS * d_mass;
+            gpuErrchk(cudaMalloc((void **) &d_mass, sizeof(CUDA_MASS)));
+            m -> arrayptr = d_mass;
+
+            d_masses.push_back(d_mass);
+
+            CUDA_MASS temp = CUDA_MASS(*m);
+            gpuErrchk(cudaMemcpy(d_mass, &temp, sizeof(CUDA_MASS), cudaMemcpyHostToDevice));
+#ifdef GRAPHICS
+            resize_buffers = true;
+#endif
+            return m;
         }
-    } else {
-        for (Mass * m : masses) {
-            delete m;
+    }
+
+    Spring * Simulation::getSpringByIndex(int i) {
+        assert(i < springs.size() && i >= 0);
+
+        return springs[i];
+    }
+
+    Mass * Simulation::getMassByIndex(int i) {
+        assert(i < masses.size() && i >= 0);
+
+        return masses[i];
+    }
+
+    Container * Simulation::getContainerByIndex(int i) {
+        assert(i < containers.size() && i >= 0);
+
+        return containers[i];
+    }
+
+    Mass * Simulation::createMass() {
+        if (ENDED) {
+            throw std::runtime_error("The simulation has ended. Cannot modify simulation after the end of the simulation.");
         }
 
-        for (Spring * s : springs) {
+        Mass * m = new Mass();
+        return createMass(m);
+    }
+
+    Mass * Simulation::createMass(const Vec & pos) {
+        if (ENDED) {
+            throw std::runtime_error("The simulation has ended. Cannot modify simulation after the end of the simulation.");
+        }
+
+        Mass * m = new Mass(pos);
+        return createMass(m);
+    }
+
+    Spring * Simulation::createSpring(Spring * s) {
+        if (ENDED) {
+            throw std::runtime_error("The simulation has ended. Cannot modify simulation after the end of the simulation.");
+        }
+
+        if (s -> _right) { s -> _right -> ref_count++; }
+        if (s -> _left) { s -> _left -> ref_count++; }
+
+        if (!STARTED) {
+            springs.push_back(s);
+            return s;
+        } else {
+            if (RUNNING) {
+                exit(1);
+            }
+
+            springs.push_back(s);
+
+            CUDA_SPRING * d_spring;
+            gpuErrchk(cudaMalloc((void **) &d_spring, sizeof(CUDA_SPRING)));
+            s -> arrayptr = d_spring;
+            d_springs.push_back(d_spring);
+
+            CUDA_SPRING temp = CUDA_SPRING(*s);
+            gpuErrchk(cudaMemcpy(d_spring, &temp, sizeof(CUDA_SPRING), cudaMemcpyHostToDevice));
+
+#ifdef GRAPHICS
+            resize_buffers = true;
+#endif
+            return s;
+        }
+    }
+
+    Spring * Simulation::createSpring() {
+        if (ENDED) {
+            throw std::runtime_error("The simulation has ended. Cannot modify simulation after the end of the simulation.");
+        }
+
+        Spring * s = new Spring();
+        return createSpring(s);
+    }
+
+    Spring * Simulation::createSpring(Mass * m1, Mass * m2) {
+        if (ENDED) {
+            throw std::runtime_error("The simulation has ended. Cannot modify simulation after the end of the simulation.");
+        }
+
+        Spring * s = new Spring(m1, m2);
+        return createSpring(s);
+    }
+
+    __global__ void invalidate(CUDA_MASS ** ptrs, CUDA_MASS * m, int size) {
+        int i = blockDim.x * blockIdx.x + threadIdx.x;
+
+        if (i < size) {
+            if (ptrs[i] == m) {
+                m -> valid = false;
+            }
+        }
+    }
+
+    void Simulation::deleteMass(Mass * m) {
+        if (ENDED) {
+            throw std::runtime_error("The simulation has ended. Cannot modify simulation after the end of the simulation.");
+        }
+
+        if (!STARTED) {
+            masses.resize(std::remove(masses.begin(), masses.end(), m) - masses.begin());
+            m -> decrementRefCount();
+        } else {
+            if (RUNNING) {
+                exit(1);
+            }
+
+            updateCudaParameters();
+            invalidate<<<massBlocksPerGrid, THREADS_PER_BLOCK>>>(d_mass, m -> arrayptr, masses.size());
+            m -> valid = false;
+
+
+            thrust::remove(thrust::device, d_masses.begin(), d_masses.begin() + masses.size(), m -> arrayptr);
+            masses.resize(std::remove(masses.begin(), masses.end(), m) - masses.begin());
+
+            d_masses.resize(masses.size());
+
+            m -> decrementRefCount();
+
+#ifdef GRAPHICS
+            resize_buffers = true;
+#endif
+        }
+    }
+
+    void Simulation::deleteSpring(Spring * s) {
+        if (ENDED) {
+            throw std::runtime_error("The simulation has ended. Cannot modify simulation after the end of the simulation.");
+        }
+
+        if (!STARTED) {
+            springs.resize(std::remove(springs.begin(), springs.end(), s) - springs.begin());
+
+            if (s -> _left) { s -> _left -> decrementRefCount(); }
+            if (s -> _right) { s -> _right -> decrementRefCount(); }
+
+        } else {
+            if (RUNNING) {
+                exit(1);
+            }
+
+            gpuErrchk(cudaFree(s -> arrayptr));
+            thrust::remove(thrust::device, d_springs.begin(), d_springs.begin() + springs.size(), s -> arrayptr);
+
+            springs.resize(std::remove(springs.begin(), springs.end(), s) - springs.begin());
+
+            if (s -> _left) { s -> _left -> decrementRefCount(); }
+            if (s -> _right) { s -> _right -> decrementRefCount(); }
+
             delete s;
-        }
 
-        for (Container * c : containers) {
-            delete c;
+#ifdef GRAPHICS
+            resize_buffers = true;
+#endif
         }
     }
-}
 
-Mass * Simulation::createMass(Mass * m) {
-    if (ENDED) {
-        throw std::runtime_error("The simulation has ended. Cannot modify simulation after the end of the simulation.");
-    }
+    struct mass_in_list {
+        __device__ __host__ mass_in_list(CUDA_MASS ** ptr, int n) : list(ptr), size(n) {};
 
-    m -> ref_count++;
+        __device__ __host__ bool operator()(CUDA_MASS * data) {
+            for (int i = 0; i < size; i++) {
+                if (list[i] == data) {
+                    data -> valid = false;
+                    return true;
+                }
+            }
 
-    if (!STARTED) {
-        masses.push_back(m);
-        return m;
-    } else {
+            return false;
+        }
+
+        CUDA_MASS ** list;
+        int size;
+    };
+
+    struct spring_in_list {
+        __device__ __host__ spring_in_list(CUDA_SPRING ** ptr, int n) : list(ptr), size(n) {};
+
+        __device__ __host__ bool operator()(CUDA_SPRING * data) {
+            for (int i = 0; i < size; i++) {
+                if (list[i] == data) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        CUDA_SPRING ** list;
+        int size;
+    };
+
+    struct host_mass_in_list {
+        __device__ __host__ host_mass_in_list(Mass ** ptr, int n) : list(ptr), size(n) {};
+
+        __device__ __host__ bool operator()(Mass * data) {
+            for (int i = 0; i < size; i++) {
+                if (list[i] == data) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        Mass ** list;
+        int size;
+    };
+
+
+    struct host_spring_in_list {
+        __device__ __host__ host_spring_in_list(Spring ** ptr, int n) : list(ptr), size(n) {};
+
+        __device__ __host__ bool operator()(Spring * data) {
+            for (int i = 0; i < size; i++) {
+                if (list[i] == data) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        Spring ** list;
+        int size;
+    };
+
+    void Simulation::deleteContainer(Container * c) {
+        if (ENDED) {
+            throw std::runtime_error("The simulation has ended. Cannot modify simulation after the end of the simulation.");
+        }
+
         if (RUNNING) {
             throw std::runtime_error("The simulation is running. Stop the simulation to make changes.");
         }
 
-        masses.push_back(m);
+        if (!STARTED) {
+            for (Mass * m : c -> masses) {
+                deleteMass(m);
+            }
 
-        CUDA_MASS * d_mass;
-        gpuErrchk(cudaMalloc((void **) &d_mass, sizeof(CUDA_MASS)));
-        m -> arrayptr = d_mass;
+            for (Spring * s : c -> springs) {
+                deleteSpring(s);
+            }
 
-        d_masses.push_back(d_mass);
+            delete c;
+            containers.resize(std::remove(containers.begin(), containers.end(), c) - containers.begin());
 
-        CUDA_MASS temp = CUDA_MASS(*m);
-        gpuErrchk(cudaMemcpy(d_mass, &temp, sizeof(CUDA_MASS), cudaMemcpyHostToDevice));
-#ifdef GRAPHICS
+            return;
+        }
+
+        {
+            CUDA_MASS ** d_ptrs = new CUDA_MASS * [c -> masses.size()];
+
+            for (int i = 0; i < c -> masses.size(); i++) {
+                d_ptrs[i] = c -> masses[i] -> arrayptr;
+                c -> masses[i] -> valid = false;
+                c -> masses[i] -> decrementRefCount();
+            }
+
+            masses.resize(thrust::remove_if(thrust::host, masses.begin(), masses.end(), host_mass_in_list(c -> masses.data(), c -> masses.size())) - masses.begin());
+
+            CUDA_MASS ** temp;
+            gpuErrchk(cudaMalloc((void **) &temp, sizeof(CUDA_MASS *) * c -> masses.size()));
+            gpuErrchk(cudaMemcpy(temp, d_ptrs, c -> masses.size() * sizeof(CUDA_MASS *), cudaMemcpyHostToDevice));
+            delete [] d_ptrs;
+
+            thrust::remove_if(thrust::device, d_masses.begin(), d_masses.begin() + masses.size() + c -> masses.size(), mass_in_list(temp, c -> masses.size()));
+            d_masses.resize(masses.size());
+
+            gpuErrchk(cudaFree(temp));
+        }
+
+        {
+            CUDA_SPRING ** d_ptrs = new CUDA_SPRING * [c -> springs.size()];
+
+            for (int i = 0; i < c -> springs.size(); i++) {
+                Spring * s = c -> springs[i];
+
+                d_ptrs[i] = s -> arrayptr;
+                gpuErrchk(cudaFree(s -> arrayptr));
+
+                if (s -> _left) { s -> _left -> decrementRefCount(); }
+                if (s -> _right) { s -> _right -> decrementRefCount(); }
+            }
+
+            springs.resize(thrust::remove_if(thrust::host, springs.begin(), springs.end(), host_spring_in_list(c -> springs.data(), c -> springs.size())) - springs.begin());
+
+            CUDA_SPRING ** temp;
+            gpuErrchk(cudaMalloc((void **) &temp, sizeof(CUDA_SPRING *) * c -> springs.size()));
+            gpuErrchk(cudaMemcpy(temp, d_ptrs, c -> springs.size() * sizeof(CUDA_SPRING *), cudaMemcpyHostToDevice));
+            delete [] d_ptrs;
+
+            thrust::remove_if(thrust::device, d_springs.begin(), d_springs.begin() + springs.size() + c -> springs.size(), spring_in_list(temp, c -> springs.size()));
+            d_springs.resize(springs.size());
+
+            gpuErrchk(cudaFree(temp));
+        }
+
+#ifdef GRAPHICS // TODO make a decision about this
         resize_buffers = true;
 #endif
-        return m;
-    }
-}
-
-Spring * Simulation::getSpringByIndex(int i) {
-    assert(i < springs.size() && i >= 0);
-
-    return springs[i];
-}
-
-Mass * Simulation::getMassByIndex(int i) {
-    assert(i < masses.size() && i >= 0);
-
-    return masses[i];
-}
-
-Container * Simulation::getContainerByIndex(int i) {
-    assert(i < containers.size() && i >= 0);
-
-    return containers[i];
-}
-
-Mass * Simulation::createMass() {
-    if (ENDED) {
-        throw std::runtime_error("The simulation has ended. Cannot modify simulation after the end of the simulation.");
-    }
-
-    Mass * m = new Mass();
-    return createMass(m);
-}
-
-Mass * Simulation::createMass(const Vec & pos) {
-    if (ENDED) {
-        throw std::runtime_error("The simulation has ended. Cannot modify simulation after the end of the simulation.");
-    }
-
-    Mass * m = new Mass(pos);
-    return createMass(m);
-}
-
-Spring * Simulation::createSpring(Spring * s) {
-    if (ENDED) {
-        throw std::runtime_error("The simulation has ended. Cannot modify simulation after the end of the simulation.");
-    }
-
-    if (s -> _right) { s -> _right -> ref_count++; }
-    if (s -> _left) { s -> _left -> ref_count++; }
-
-    if (!STARTED) {
-        springs.push_back(s);
-        return s;
-    } else {
-        if (RUNNING) {
-            exit(1);
-        }
-
-        springs.push_back(s);
-
-        CUDA_SPRING * d_spring;
-        gpuErrchk(cudaMalloc((void **) &d_spring, sizeof(CUDA_SPRING)));
-        s -> arrayptr = d_spring;
-        d_springs.push_back(d_spring);
-
-        CUDA_SPRING temp = CUDA_SPRING(*s);
-        gpuErrchk(cudaMemcpy(d_spring, &temp, sizeof(CUDA_SPRING), cudaMemcpyHostToDevice));
-
-#ifdef GRAPHICS
-        resize_buffers = true;
-#endif
-        return s;
-    }
-}
-
-Spring * Simulation::createSpring() {
-    if (ENDED) {
-        throw std::runtime_error("The simulation has ended. Cannot modify simulation after the end of the simulation.");
-    }
-
-    Spring * s = new Spring();
-    return createSpring(s);
-}
-
-Spring * Simulation::createSpring(Mass * m1, Mass * m2) {
-    if (ENDED) {
-        throw std::runtime_error("The simulation has ended. Cannot modify simulation after the end of the simulation.");
-    }
-
-    Spring * s = new Spring(m1, m2);
-    return createSpring(s);
-}
-
-__global__ void invalidate(CUDA_MASS ** ptrs, CUDA_MASS * m, int size) {
-    int i = blockDim.x * blockIdx.x + threadIdx.x;
-
-    if (i < size) {
-        if (ptrs[i] == m) {
-            m -> valid = false;
-        }
-    }
-}
-
-void Simulation::deleteMass(Mass * m) {
-    if (ENDED) {
-        throw std::runtime_error("The simulation has ended. Cannot modify simulation after the end of the simulation.");
-    }
-
-    if (!STARTED) {
-        masses.resize(std::remove(masses.begin(), masses.end(), m) - masses.begin());
-        m -> decrementRefCount();
-    } else {
-        if (RUNNING) {
-            exit(1);
-        }
-
-        updateCudaParameters();
-        invalidate<<<massBlocksPerGrid, THREADS_PER_BLOCK>>>(d_mass, m -> arrayptr, masses.size());
-        m -> valid = false;
-
-
-        thrust::remove(thrust::device, d_masses.begin(), d_masses.begin() + masses.size(), m -> arrayptr);
-        masses.resize(std::remove(masses.begin(), masses.end(), m) - masses.begin());
-
-        d_masses.resize(masses.size());
-
-        m -> decrementRefCount();
-
-#ifdef GRAPHICS
-        resize_buffers = true;
-#endif
-    }
-}
-
-void Simulation::deleteSpring(Spring * s) {
-    if (ENDED) {
-        throw std::runtime_error("The simulation has ended. Cannot modify simulation after the end of the simulation.");
-    }
-
-    if (!STARTED) {
-        springs.resize(std::remove(springs.begin(), springs.end(), s) - springs.begin());
-
-        if (s -> _left) { s -> _left -> decrementRefCount(); }
-        if (s -> _right) { s -> _right -> decrementRefCount(); }
-
-    } else {
-        if (RUNNING) {
-            exit(1);
-        }
-
-        gpuErrchk(cudaFree(s -> arrayptr));
-        thrust::remove(thrust::device, d_springs.begin(), d_springs.begin() + springs.size(), s -> arrayptr);
-
-        springs.resize(std::remove(springs.begin(), springs.end(), s) - springs.begin());
-
-        if (s -> _left) { s -> _left -> decrementRefCount(); }
-        if (s -> _right) { s -> _right -> decrementRefCount(); }
-
-        delete s;
-
-#ifdef GRAPHICS
-        resize_buffers = true;
-#endif
-    }
-}
-
-struct mass_in_list {
-    __device__ __host__ mass_in_list(CUDA_MASS ** ptr, int n) : list(ptr), size(n) {};
-
-    __device__ __host__ bool operator()(CUDA_MASS * data) {
-        for (int i = 0; i < size; i++) {
-            if (list[i] == data) {
-                data -> valid = false;
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    CUDA_MASS ** list;
-    int size;
-};
-
-struct spring_in_list {
-    __device__ __host__ spring_in_list(CUDA_SPRING ** ptr, int n) : list(ptr), size(n) {};
-
-    __device__ __host__ bool operator()(CUDA_SPRING * data) {
-        for (int i = 0; i < size; i++) {
-            if (list[i] == data) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    CUDA_SPRING ** list;
-    int size;
-};
-
-struct host_mass_in_list {
-    __device__ __host__ host_mass_in_list(Mass ** ptr, int n) : list(ptr), size(n) {};
-
-    __device__ __host__ bool operator()(Mass * data) {
-        for (int i = 0; i < size; i++) {
-            if (list[i] == data) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    Mass ** list;
-    int size;
-};
-
-
-struct host_spring_in_list {
-    __device__ __host__ host_spring_in_list(Spring ** ptr, int n) : list(ptr), size(n) {};
-
-    __device__ __host__ bool operator()(Spring * data) {
-        for (int i = 0; i < size; i++) {
-            if (list[i] == data) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    Spring ** list;
-    int size;
-};
-
-void Simulation::deleteContainer(Container * c) {
-    if (ENDED) {
-        throw std::runtime_error("The simulation has ended. Cannot modify simulation after the end of the simulation.");
-    }
-
-    if (RUNNING) {
-        throw std::runtime_error("The simulation is running. Stop the simulation to make changes.");
-    }
-
-    if (!STARTED) {
-        for (Mass * m : c -> masses) {
-            deleteMass(m);
-        }
-
-        for (Spring * s : c -> springs) {
-            deleteSpring(s);
-        }
 
         delete c;
         containers.resize(std::remove(containers.begin(), containers.end(), c) - containers.begin());
-
-        return;
     }
-
-    {
-        CUDA_MASS ** d_ptrs = new CUDA_MASS * [c -> masses.size()];
-
-        for (int i = 0; i < c -> masses.size(); i++) {
-            d_ptrs[i] = c -> masses[i] -> arrayptr;
-            c -> masses[i] -> valid = false;
-            c -> masses[i] -> decrementRefCount();
-        }
-
-        masses.resize(thrust::remove_if(thrust::host, masses.begin(), masses.end(), host_mass_in_list(c -> masses.data(), c -> masses.size())) - masses.begin());
-
-        CUDA_MASS ** temp;
-        gpuErrchk(cudaMalloc((void **) &temp, sizeof(CUDA_MASS *) * c -> masses.size()));
-        gpuErrchk(cudaMemcpy(temp, d_ptrs, c -> masses.size() * sizeof(CUDA_MASS *), cudaMemcpyHostToDevice));
-        delete [] d_ptrs;
-
-        thrust::remove_if(thrust::device, d_masses.begin(), d_masses.begin() + masses.size() + c -> masses.size(), mass_in_list(temp, c -> masses.size()));
-        d_masses.resize(masses.size());
-
-        gpuErrchk(cudaFree(temp));
-    }
-
-    {
-        CUDA_SPRING ** d_ptrs = new CUDA_SPRING * [c -> springs.size()];
-
-        for (int i = 0; i < c -> springs.size(); i++) {
-            Spring * s = c -> springs[i];
-
-            d_ptrs[i] = s -> arrayptr;
-            gpuErrchk(cudaFree(s -> arrayptr));
-
-            if (s -> _left) { s -> _left -> decrementRefCount(); }
-            if (s -> _right) { s -> _right -> decrementRefCount(); }
-        }
-
-        springs.resize(thrust::remove_if(thrust::host, springs.begin(), springs.end(), host_spring_in_list(c -> springs.data(), c -> springs.size())) - springs.begin());
-
-        CUDA_SPRING ** temp;
-        gpuErrchk(cudaMalloc((void **) &temp, sizeof(CUDA_SPRING *) * c -> springs.size()));
-        gpuErrchk(cudaMemcpy(temp, d_ptrs, c -> springs.size() * sizeof(CUDA_SPRING *), cudaMemcpyHostToDevice));
-        delete [] d_ptrs;
-
-        thrust::remove_if(thrust::device, d_springs.begin(), d_springs.begin() + springs.size() + c -> springs.size(), spring_in_list(temp, c -> springs.size()));
-        d_springs.resize(springs.size());
-
-        gpuErrchk(cudaFree(temp));
-    }
-
-#ifdef GRAPHICS // TODO make a decision about this
-    resize_buffers = true;
-#endif
-
-    delete c;
-    containers.resize(std::remove(containers.begin(), containers.end(), c) - containers.begin());
-}
 
 //void Simulation::deleteContainer(Container * c) {
 //    if (RUNNING) {
@@ -588,151 +584,266 @@ void Simulation::deleteContainer(Container * c) {
 //    containers.remove(c);
 //}
 
-void Simulation::get(Mass * m) {
-    if (!STARTED) {
-        std::cerr << "The simulation has not started. Get and set commands cannot be called before sim.start()" << std::endl;
-        return;
-    }
-
-    if (ENDED) {
-        throw std::runtime_error("The simulation has ended. Cannot modify simulation after the end of the simulation.");
-    }
-
-    CUDA_MASS temp;
-    gpuErrchk(cudaMemcpy(&temp, m -> arrayptr, sizeof(CUDA_MASS), cudaMemcpyDeviceToHost));
-    *m = temp;
-}
-
-void Simulation::set(Mass * m) {
-    if (!STARTED) {
-        std::cerr << "The simulation has not started. Get and set commands cannot be called before sim.start()" << std::endl;
-        return;
-    }
-
-    if (ENDED) {
-        throw std::runtime_error("The simulation has ended. Cannot modify simulation after the end of the simulation.");
-    }
-
-    CUDA_MASS temp = CUDA_MASS(*m);
-    gpuErrchk(cudaMemcpy(m -> arrayptr, &temp, sizeof(CUDA_MASS), cudaMemcpyHostToDevice));
-}
-
-void Simulation::get(Spring * s) {
-    if (!STARTED) {
-        std::cerr << "The simulation has not started. Get and set commands cannot be called before sim.start()" << std::endl;
-        return;
-    }
-
-    if (ENDED) {
-        throw std::runtime_error("The simulation has ended. Cannot modify simulation after the end of the simulation.");
-    }
-
-    CUDA_SPRING temp;
-    gpuErrchk(cudaMemcpy(&temp, s -> arrayptr, sizeof(CUDA_SPRING), cudaMemcpyDeviceToHost));
-    s -> update(temp);
-}
-
-void Simulation::set(Spring * s) {
-    if (!STARTED) {
-        std::cerr << "The simulation has not started. Get and set commands cannot be called before sim.start()" << std::endl;
-        return;
-    }
-
-    CUDA_SPRING temp = CUDA_SPRING(*s);
-    gpuErrchk(cudaMemcpy(s -> arrayptr, &temp, sizeof(CUDA_SPRING), cudaMemcpyHostToDevice));
-}
-
-void Simulation::getAll() {
-    if (!STARTED) {
-        std::cerr << "The simulation has not started. Get and set commands cannot be called before sim.start()" << std::endl;
-        return;
-    }
-
-    if (ENDED) {
-        throw std::runtime_error("The simulation has ended. Cannot modify simulation after the end of the simulation.");
-    }
-
-    massFromArray(); // TODO make a note of this
-}
-
-void Simulation::set(Container * c) {
-    if (ENDED) {
-        throw std::runtime_error("The simulation has ended. Cannot modify simulation after the end of the simulation.");
-    }
-
-    if (!STARTED) {
-        std::cerr << "The simulation has not started. Get and set commands cannot be called before sim.start()" << std::endl;
-        return;
-    }
-
-    {
-        CUDA_MASS * h_data = new CUDA_MASS[c -> masses.size()]; // copy masses into single array for copying to the GPU, set GPU pointers
-        CUDA_MASS ** d_ptrs = new CUDA_MASS * [c -> masses.size()];
-
-        for (int i = 0; i < c -> masses.size(); i++) {
-            d_ptrs[i] = c -> masses[i] -> arrayptr;
-            h_data[i] = CUDA_MASS(*c -> masses[i]);
+    void Simulation::get(Mass * m) {
+        if (!STARTED) {
+            std::cerr << "The simulation has not started. Get and set commands cannot be called before sim.start()" << std::endl;
+            return;
         }
 
-        CUDA_MASS ** temp;
-        gpuErrchk(cudaMalloc((void **) &temp, sizeof(CUDA_MASS *) * c -> masses.size()));
-        gpuErrchk(cudaMemcpy(temp, d_ptrs, c -> masses.size() * sizeof(CUDA_MASS *), cudaMemcpyHostToDevice));
-        delete [] d_ptrs;
+        if (ENDED) {
+            throw std::runtime_error("The simulation has ended. Cannot modify simulation after the end of the simulation.");
+        }
 
-        CUDA_MASS * d_data; // copy to the GPU
-        gpuErrchk(cudaMalloc((void **)&d_data, sizeof(CUDA_MASS) * c -> masses.size()));
-        gpuErrchk(cudaMemcpy(d_data, h_data, sizeof(CUDA_MASS) * c -> masses.size(), cudaMemcpyHostToDevice));
-        delete [] h_data;
-
-        updateCudaParameters();
-        createMassPointers<<<massBlocksPerGrid, THREADS_PER_BLOCK>>>(temp, d_data, c -> masses.size());
-
-        gpuErrchk(cudaFree(d_data));
-        gpuErrchk(cudaFree(temp));
+        CUDA_MASS temp;
+        gpuErrchk(cudaMemcpy(&temp, m -> arrayptr, sizeof(CUDA_MASS), cudaMemcpyDeviceToHost));
+        *m = temp;
     }
 
-    {
-        CUDA_SPRING * h_spring = new CUDA_SPRING[c -> springs.size()];
-        CUDA_SPRING ** d_ptrs = new CUDA_SPRING *[c -> springs.size()];
+    void Simulation::set(Mass * m) {
+        if (!STARTED) {
+            std::cerr << "The simulation has not started. Get and set commands cannot be called before sim.start()" << std::endl;
+            return;
+        }
 
-        int count = 0;
+        if (ENDED) {
+            throw std::runtime_error("The simulation has ended. Cannot modify simulation after the end of the simulation.");
+        }
+
+        CUDA_MASS temp = CUDA_MASS(*m);
+        gpuErrchk(cudaMemcpy(m -> arrayptr, &temp, sizeof(CUDA_MASS), cudaMemcpyHostToDevice));
+    }
+
+    void Simulation::get(Spring * s) {
+        if (!STARTED) {
+            std::cerr << "The simulation has not started. Get and set commands cannot be called before sim.start()" << std::endl;
+            return;
+        }
+
+        if (ENDED) {
+            throw std::runtime_error("The simulation has ended. Cannot modify simulation after the end of the simulation.");
+        }
+
+        CUDA_SPRING temp;
+        gpuErrchk(cudaMemcpy(&temp, s -> arrayptr, sizeof(CUDA_SPRING), cudaMemcpyDeviceToHost));
+        s -> update(temp);
+    }
+
+    void Simulation::set(Spring * s) {
+        if (!STARTED) {
+            std::cerr << "The simulation has not started. Get and set commands cannot be called before sim.start()" << std::endl;
+            return;
+        }
+
+        CUDA_SPRING temp = CUDA_SPRING(*s);
+        gpuErrchk(cudaMemcpy(s -> arrayptr, &temp, sizeof(CUDA_SPRING), cudaMemcpyHostToDevice));
+    }
+
+    void Simulation::getAll() {
+        if (!STARTED) {
+            std::cerr << "The simulation has not started. Get and set commands cannot be called before sim.start()" << std::endl;
+            return;
+        }
+
+        if (ENDED) {
+            throw std::runtime_error("The simulation has ended. Cannot modify simulation after the end of the simulation.");
+        }
+
+        massFromArray(); // TODO make a note of this
+    }
+
+    void Simulation::set(Container * c) {
+        if (ENDED) {
+            throw std::runtime_error("The simulation has ended. Cannot modify simulation after the end of the simulation.");
+        }
+
+        if (!STARTED) {
+            std::cerr << "The simulation has not started. Get and set commands cannot be called before sim.start()" << std::endl;
+            return;
+        }
+
+        {
+            CUDA_MASS * h_data = new CUDA_MASS[c -> masses.size()]; // copy masses into single array for copying to the GPU, set GPU pointers
+            CUDA_MASS ** d_ptrs = new CUDA_MASS * [c -> masses.size()];
+
+            for (int i = 0; i < c -> masses.size(); i++) {
+                d_ptrs[i] = c -> masses[i] -> arrayptr;
+                h_data[i] = CUDA_MASS(*c -> masses[i]);
+            }
+
+            CUDA_MASS ** temp;
+            gpuErrchk(cudaMalloc((void **) &temp, sizeof(CUDA_MASS *) * c -> masses.size()));
+            gpuErrchk(cudaMemcpy(temp, d_ptrs, c -> masses.size() * sizeof(CUDA_MASS *), cudaMemcpyHostToDevice));
+            delete [] d_ptrs;
+
+            CUDA_MASS * d_data; // copy to the GPU
+            gpuErrchk(cudaMalloc((void **)&d_data, sizeof(CUDA_MASS) * c -> masses.size()));
+            gpuErrchk(cudaMemcpy(d_data, h_data, sizeof(CUDA_MASS) * c -> masses.size(), cudaMemcpyHostToDevice));
+            delete [] h_data;
+
+            updateCudaParameters();
+            createMassPointers<<<massBlocksPerGrid, THREADS_PER_BLOCK>>>(temp, d_data, c -> masses.size());
+
+            gpuErrchk(cudaFree(d_data));
+            gpuErrchk(cudaFree(temp));
+        }
+
+        {
+            CUDA_SPRING * h_spring = new CUDA_SPRING[c -> springs.size()];
+            CUDA_SPRING ** d_ptrs = new CUDA_SPRING *[c -> springs.size()];
+
+            int count = 0;
+            for (Spring * s : springs) {
+                d_ptrs[count] = c -> springs[count] -> arrayptr;
+                h_spring[count] = CUDA_SPRING(*s, s -> _left -> arrayptr, s -> _right -> arrayptr);
+                count++;
+            }
+
+            CUDA_SPRING ** temp;
+            gpuErrchk(cudaMalloc((void **) &temp, sizeof(CUDA_SPRING *) * c -> springs.size()));
+            gpuErrchk(cudaMemcpy(temp, d_ptrs, c -> springs.size() * sizeof(CUDA_SPRING *), cudaMemcpyHostToDevice));
+            delete [] d_ptrs;
+
+            CUDA_SPRING * d_data;
+            gpuErrchk(cudaMalloc((void **)& d_data, sizeof(CUDA_SPRING) * springs.size()));
+            gpuErrchk(cudaMemcpy(d_data, h_spring, sizeof(CUDA_SPRING) * springs.size(), cudaMemcpyHostToDevice));
+            delete [] h_spring;
+
+            createSpringPointers<<<springBlocksPerGrid, THREADS_PER_BLOCK>>>(temp, d_data, springs.size());
+
+            gpuErrchk(cudaFree(d_data));
+            gpuErrchk(cudaFree(temp));
+        }
+    }
+
+    void Simulation::setAll() {
+        if (ENDED) {
+            throw std::runtime_error("The simulation has ended. Cannot modify simulation after the end of the simulation.");
+        }
+
+        {
+            CUDA_MASS * h_data = new CUDA_MASS[masses.size()]; // copy masses into single array for copying to the GPU, set GPU pointers
+
+            int count = 0;
+
+            for (Mass * m : masses) {
+                h_data[count] = CUDA_MASS(*m);
+                count++;
+            }
+
+            CUDA_MASS * d_data; // copy to the GPU
+            gpuErrchk(cudaMalloc((void **)&d_data, sizeof(CUDA_MASS) * masses.size()));
+            gpuErrchk(cudaMemcpy(d_data, h_data, sizeof(CUDA_MASS) * masses.size(), cudaMemcpyHostToDevice));
+
+            delete [] h_data;
+
+            updateCudaParameters();
+            createMassPointers<<<massBlocksPerGrid, THREADS_PER_BLOCK>>>(thrust::raw_pointer_cast(d_masses.data()), d_data, masses.size());
+
+            gpuErrchk(cudaFree(d_data));
+        }
+
+        {
+            CUDA_SPRING * h_spring = new CUDA_SPRING[springs.size()];
+
+            int count = 0;
+            for (Spring * s : springs) {
+                h_spring[count] = CUDA_SPRING(*s, s -> _left -> arrayptr, s -> _right -> arrayptr);
+                count++;
+            }
+
+            CUDA_SPRING * d_data;
+            gpuErrchk(cudaMalloc((void **)& d_data, sizeof(CUDA_SPRING) * springs.size()));
+            gpuErrchk(cudaMemcpy(d_data, h_spring, sizeof(CUDA_SPRING) * springs.size(), cudaMemcpyHostToDevice));
+
+            delete [] h_spring;
+
+            createSpringPointers<<<springBlocksPerGrid, THREADS_PER_BLOCK>>>(thrust::raw_pointer_cast(d_springs.data()), d_data, springs.size());
+            gpuErrchk(cudaFree(d_data));
+        }
+    }
+
+
+
+    void Simulation::setAllSpringConstantValues(double k) {
+        if (ENDED) {
+            throw std::runtime_error("The simulation has ended. Cannot modify simulation after the end of the simulation.");
+        }
+
         for (Spring * s : springs) {
-            d_ptrs[count] = c -> springs[count] -> arrayptr;
-            h_spring[count] = CUDA_SPRING(*s, s -> _left -> arrayptr, s -> _right -> arrayptr);
-            count++;
+            s -> _k = k;
+        }
+    }
+
+    void Simulation::defaultRestLengths() {
+        if (ENDED) {
+            throw std::runtime_error("The simulation has ended. Cannot modify simulation after the end of the simulation.");
         }
 
-        CUDA_SPRING ** temp;
-        gpuErrchk(cudaMalloc((void **) &temp, sizeof(CUDA_SPRING *) * c -> springs.size()));
-        gpuErrchk(cudaMemcpy(temp, d_ptrs, c -> springs.size() * sizeof(CUDA_SPRING *), cudaMemcpyHostToDevice));
-        delete [] d_ptrs;
-
-        CUDA_SPRING * d_data;
-        gpuErrchk(cudaMalloc((void **)& d_data, sizeof(CUDA_SPRING) * springs.size()));
-        gpuErrchk(cudaMemcpy(d_data, h_spring, sizeof(CUDA_SPRING) * springs.size(), cudaMemcpyHostToDevice));
-        delete [] h_spring;
-
-        createSpringPointers<<<springBlocksPerGrid, THREADS_PER_BLOCK>>>(temp, d_data, springs.size());
-
-        gpuErrchk(cudaFree(d_data));
-        gpuErrchk(cudaFree(temp));
-    }
-}
-
-void Simulation::setAll() {
-    if (ENDED) {
-        throw std::runtime_error("The simulation has ended. Cannot modify simulation after the end of the simulation.");
+        for (Spring * s : springs) {
+            s -> defaultLength();
+        }
     }
 
-    {
+    void Simulation::setAllMassValues(double m) {
+        if (ENDED) {
+            throw std::runtime_error("The simulation has ended. Cannot modify simulation after the end of the simulation.");
+        }
+
+        for (Mass * mass : masses) {
+            mass -> m += m;
+        }
+    }
+    void Simulation::setTimeStep(double delta_t) {
+        if (ENDED) {
+            throw std::runtime_error("The simulation has ended. Cannot modify simulation after the end of the simulation.");
+        }
+
+        if (delta_t <= 0) {
+            throw std::runtime_error("Cannot set time step to negative or zero value.");
+        }
+
+        this -> dt = delta_t;
+    }
+
+    double Simulation::getTimeStep() {
+        return this -> dt;
+    }
+
+    void Simulation::setBreakpoint(double time) {
+        if (ENDED) {
+            throw std::runtime_error("The simulation has ended. Cannot set breakpoints after the end of the simulation run.");
+        }
+
+        bpts.insert(time); // TODO mutex breakpoints
+    }
+
+    __global__ void createMassPointers(CUDA_MASS ** ptrs, CUDA_MASS * data, int size) {
+        int i = blockDim.x * blockIdx.x + threadIdx.x;
+
+        if (i < size) {
+            *ptrs[i] = data[i];
+        }
+    }
+
+    CUDA_MASS ** Simulation::massToArray() {
+        CUDA_MASS ** d_ptrs = new CUDA_MASS * [masses.size()]; // array of pointers
+        for (int i = 0; i < masses.size(); i++) { // potentially slow
+            gpuErrchk(cudaMalloc((void **) (d_ptrs + i), sizeof(CUDA_MASS))); // TODO Fix this shit
+        }
+
+        d_masses = thrust::device_vector<CUDA_MASS *>(d_ptrs, d_ptrs + masses.size());
+
         CUDA_MASS * h_data = new CUDA_MASS[masses.size()]; // copy masses into single array for copying to the GPU, set GPU pointers
 
         int count = 0;
-
         for (Mass * m : masses) {
+            m -> arrayptr = d_ptrs[count];
             h_data[count] = CUDA_MASS(*m);
+
             count++;
         }
+
+        delete [] d_ptrs;
 
         CUDA_MASS * d_data; // copy to the GPU
         gpuErrchk(cudaMalloc((void **)&d_data, sizeof(CUDA_MASS) * masses.size()));
@@ -740,20 +851,54 @@ void Simulation::setAll() {
 
         delete [] h_data;
 
-        updateCudaParameters();
-        createMassPointers<<<massBlocksPerGrid, THREADS_PER_BLOCK>>>(thrust::raw_pointer_cast(d_masses.data()), d_data, masses.size());
+        massBlocksPerGrid = (masses.size() + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
 
+        if (massBlocksPerGrid > MAX_BLOCKS) {
+            massBlocksPerGrid = MAX_BLOCKS;
+        }
+
+        if (massBlocksPerGrid < 1) {
+            massBlocksPerGrid = 1;
+        }
+
+        createMassPointers<<<massBlocksPerGrid, THREADS_PER_BLOCK>>>(thrust::raw_pointer_cast(d_masses.data()), d_data, masses.size());
         gpuErrchk(cudaFree(d_data));
+
+        return thrust::raw_pointer_cast(d_masses.data()); // doesn't really do anything
     }
 
-    {
-        CUDA_SPRING * h_spring = new CUDA_SPRING[springs.size()];
+    __global__ void createSpringPointers(CUDA_SPRING ** ptrs, CUDA_SPRING * data, int size) {
+        int i = blockDim.x * blockIdx.x + threadIdx.x;
+
+        if (i < size) {
+//        ptrs[i] = (CUDA_SPRING *) malloc(sizeof(CUDA_SPRING));
+            *ptrs[i] = data[i];
+        }
+    }
+
+    CUDA_SPRING ** Simulation::springToArray() {
+        CUDA_SPRING ** d_ptrs = new CUDA_SPRING * [springs.size()]; // array of pointers
+
+        for (int i = 0; i < springs.size(); i++) { // potentially slow, allocate memory for every spring
+            gpuErrchk(cudaMalloc((void **) d_ptrs + i, sizeof(CUDA_SPRING)));
+        }
+
+        d_springs = thrust::device_vector<CUDA_SPRING *>(d_ptrs, d_ptrs + springs.size()); // copy those pointers to the GPU using thrust
+
+        CUDA_SPRING * h_spring = new CUDA_SPRING[springs.size()]; // array for the springs themselves
 
         int count = 0;
         for (Spring * s : springs) {
-            h_spring[count] = CUDA_SPRING(*s, s -> _left -> arrayptr, s -> _right -> arrayptr);
+            s -> arrayptr = d_ptrs[count];
+            if (s -> _left && s -> _right) {
+                h_spring[count] = CUDA_SPRING(*s, s -> _left -> arrayptr, s -> _right -> arrayptr);
+            } else {
+                h_spring[count] = CUDA_SPRING(*s);
+            }
             count++;
         }
+
+        delete [] d_ptrs;
 
         CUDA_SPRING * d_data;
         gpuErrchk(cudaMalloc((void **)& d_data, sizeof(CUDA_SPRING) * springs.size()));
@@ -763,158 +908,9 @@ void Simulation::setAll() {
 
         createSpringPointers<<<springBlocksPerGrid, THREADS_PER_BLOCK>>>(thrust::raw_pointer_cast(d_springs.data()), d_data, springs.size());
         gpuErrchk(cudaFree(d_data));
+
+        return thrust::raw_pointer_cast(d_springs.data());
     }
-}
-
-
-
-void Simulation::setAllSpringConstantValues(double k) {
-    if (ENDED) {
-        throw std::runtime_error("The simulation has ended. Cannot modify simulation after the end of the simulation.");
-    }
-
-    for (Spring * s : springs) {
-        s -> _k = k;
-    }
-}
-
-void Simulation::defaultRestLengths() {
-    if (ENDED) {
-        throw std::runtime_error("The simulation has ended. Cannot modify simulation after the end of the simulation.");
-    }
-
-    for (Spring * s : springs) {
-        s -> defaultLength();
-    }
-}
-
-void Simulation::setAllMassValues(double m) {
-    if (ENDED) {
-        throw std::runtime_error("The simulation has ended. Cannot modify simulation after the end of the simulation.");
-    }
-
-    for (Mass * mass : masses) {
-        mass -> m += m;
-    }
-}
-void Simulation::setTimeStep(double delta_t) {
-    if (ENDED) {
-        throw std::runtime_error("The simulation has ended. Cannot modify simulation after the end of the simulation.");
-    }
-
-    if (delta_t <= 0) {
-        throw std::runtime_error("Cannot set time step to negative or zero value.");
-    }
-
-    this -> dt = delta_t;
-}
-
-double Simulation::getTimeStep() {
-    return this -> dt;
-}
-
-void Simulation::setBreakpoint(double time) {
-    if (ENDED) {
-        throw std::runtime_error("The simulation has ended. Cannot set breakpoints after the end of the simulation run.");
-    }
-
-    bpts.insert(time); // TODO mutex breakpoints
-}
-
-__global__ void createMassPointers(CUDA_MASS ** ptrs, CUDA_MASS * data, int size) {
-    int i = blockDim.x * blockIdx.x + threadIdx.x;
-
-    if (i < size) {
-        *ptrs[i] = data[i];
-    }
-}
-
-CUDA_MASS ** Simulation::massToArray() {
-    CUDA_MASS ** d_ptrs = new CUDA_MASS * [masses.size()]; // array of pointers
-    for (int i = 0; i < masses.size(); i++) { // potentially slow
-        gpuErrchk(cudaMalloc((void **) (d_ptrs + i), sizeof(CUDA_MASS))); // TODO Fix this shit
-    }
-
-    d_masses = thrust::device_vector<CUDA_MASS *>(d_ptrs, d_ptrs + masses.size());
-
-    CUDA_MASS * h_data = new CUDA_MASS[masses.size()]; // copy masses into single array for copying to the GPU, set GPU pointers
-
-    int count = 0;
-    for (Mass * m : masses) {
-        m -> arrayptr = d_ptrs[count];
-        h_data[count] = CUDA_MASS(*m);
-
-        count++;
-    }
-
-    delete [] d_ptrs;
-
-    CUDA_MASS * d_data; // copy to the GPU
-    gpuErrchk(cudaMalloc((void **)&d_data, sizeof(CUDA_MASS) * masses.size()));
-    gpuErrchk(cudaMemcpy(d_data, h_data, sizeof(CUDA_MASS) * masses.size(), cudaMemcpyHostToDevice));
-
-    delete [] h_data;
-
-    massBlocksPerGrid = (masses.size() + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
-
-    if (massBlocksPerGrid > MAX_BLOCKS) {
-        massBlocksPerGrid = MAX_BLOCKS;
-    }
-
-    if (massBlocksPerGrid < 1) {
-        massBlocksPerGrid = 1;
-    }
-
-    createMassPointers<<<massBlocksPerGrid, THREADS_PER_BLOCK>>>(thrust::raw_pointer_cast(d_masses.data()), d_data, masses.size());
-    gpuErrchk(cudaFree(d_data));
-
-    return thrust::raw_pointer_cast(d_masses.data()); // doesn't really do anything
-}
-
-__global__ void createSpringPointers(CUDA_SPRING ** ptrs, CUDA_SPRING * data, int size) {
-    int i = blockDim.x * blockIdx.x + threadIdx.x;
-
-    if (i < size) {
-//        ptrs[i] = (CUDA_SPRING *) malloc(sizeof(CUDA_SPRING));
-        *ptrs[i] = data[i];
-    }
-}
-
-CUDA_SPRING ** Simulation::springToArray() {
-    CUDA_SPRING ** d_ptrs = new CUDA_SPRING * [springs.size()]; // array of pointers
-
-    for (int i = 0; i < springs.size(); i++) { // potentially slow, allocate memory for every spring
-        gpuErrchk(cudaMalloc((void **) d_ptrs + i, sizeof(CUDA_SPRING)));
-    }
-
-    d_springs = thrust::device_vector<CUDA_SPRING *>(d_ptrs, d_ptrs + springs.size()); // copy those pointers to the GPU using thrust
-
-    CUDA_SPRING * h_spring = new CUDA_SPRING[springs.size()]; // array for the springs themselves
-
-    int count = 0;
-    for (Spring * s : springs) {
-        s -> arrayptr = d_ptrs[count];
-        if (s -> _left && s -> _right) {
-            h_spring[count] = CUDA_SPRING(*s, s -> _left -> arrayptr, s -> _right -> arrayptr);
-        } else {
-            h_spring[count] = CUDA_SPRING(*s);
-        }
-        count++;
-    }
-
-    delete [] d_ptrs;
-
-    CUDA_SPRING * d_data;
-    gpuErrchk(cudaMalloc((void **)& d_data, sizeof(CUDA_SPRING) * springs.size()));
-    gpuErrchk(cudaMemcpy(d_data, h_spring, sizeof(CUDA_SPRING) * springs.size(), cudaMemcpyHostToDevice));
-
-    delete [] h_spring;
-
-    createSpringPointers<<<springBlocksPerGrid, THREADS_PER_BLOCK>>>(thrust::raw_pointer_cast(d_springs.data()), d_data, springs.size());
-    gpuErrchk(cudaFree(d_data));
-
-    return thrust::raw_pointer_cast(d_springs.data());
-}
 
 //void Simulation::constraintsToArray() {
 //    d_constraints.reserve(constraints.size());
@@ -927,300 +923,214 @@ CUDA_SPRING ** Simulation::springToArray() {
 //    }
 //}
 
-void Simulation::toArray() {
-    CUDA_MASS ** d_mass = massToArray(); // must come first
-    CUDA_SPRING ** d_spring = springToArray();
-}
-
-__global__ void fromMassPointers(CUDA_MASS ** d_mass, CUDA_MASS * data, int size) {
-    int i = blockDim.x * blockIdx.x + threadIdx.x;
-
-    if (i < size) {
-        data[i] = *d_mass[i];
-    }
-}
-
-void Simulation::get(Container *c) {
-    if (ENDED) {
-        throw std::runtime_error("The simulation has ended. Cannot get updates from the GPU after the end of the simulation.");
-    } else if (!STARTED) {
-        std::cerr << "sim.get() does nothing if called before the simulation has started." << std::endl;
-        return;
+    void Simulation::toArray() {
+        CUDA_MASS ** d_mass = massToArray(); // must come first
+        CUDA_SPRING ** d_spring = springToArray();
     }
 
-    CUDA_MASS ** temp;
+    __global__ void fromMassPointers(CUDA_MASS ** d_mass, CUDA_MASS * data, int size) {
+        int i = blockDim.x * blockIdx.x + threadIdx.x;
 
-    gpuErrchk(cudaMalloc((void **) &temp, sizeof(CUDA_MASS *) * c -> masses.size()));
-
-    CUDA_MASS ** d_ptrs = new CUDA_MASS * [c -> masses.size()];
-
-    for (int i = 0; i < c -> masses.size(); i++) {
-        d_ptrs[i] = c -> masses[i] -> arrayptr;
+        if (i < size) {
+            data[i] = *d_mass[i];
+        }
     }
 
-    gpuErrchk(cudaMemcpy(temp, d_ptrs, c -> masses.size() * sizeof(CUDA_MASS *), cudaMemcpyHostToDevice));
+    void Simulation::get(Container *c) {
+        if (ENDED) {
+            throw std::runtime_error("The simulation has ended. Cannot get updates from the GPU after the end of the simulation.");
+        } else if (!STARTED) {
+            std::cerr << "sim.get() does nothing if called before the simulation has started." << std::endl;
+            return;
+        }
 
-    delete [] d_ptrs;
+        CUDA_MASS ** temp;
 
-    CUDA_MASS * temp_data;
-    gpuErrchk(cudaMalloc((void **) &temp_data, sizeof(CUDA_MASS) * c -> masses.size()));
+        gpuErrchk(cudaMalloc((void **) &temp, sizeof(CUDA_MASS *) * c -> masses.size()));
 
-    updateCudaParameters();
-    fromMassPointers<<<massBlocksPerGrid, THREADS_PER_BLOCK>>>(temp, temp_data, c -> masses.size());
-    gpuErrchk(cudaFree(temp));
+        CUDA_MASS ** d_ptrs = new CUDA_MASS * [c -> masses.size()];
 
-    CUDA_MASS * h_mass = new CUDA_MASS[masses.size()];
-    gpuErrchk(cudaMemcpy(h_mass, temp_data, sizeof(CUDA_MASS) * masses.size(), cudaMemcpyDeviceToHost));
-    gpuErrchk(cudaFree(temp_data));
+        for (int i = 0; i < c -> masses.size(); i++) {
+            d_ptrs[i] = c -> masses[i] -> arrayptr;
+        }
 
-    int count = 0;
+        gpuErrchk(cudaMemcpy(temp, d_ptrs, c -> masses.size() * sizeof(CUDA_MASS *), cudaMemcpyHostToDevice));
 
-    for (Mass * m : c -> masses) {
-        *m = h_mass[count];
-        count++;
+        delete [] d_ptrs;
+
+        CUDA_MASS * temp_data;
+        gpuErrchk(cudaMalloc((void **) &temp_data, sizeof(CUDA_MASS) * c -> masses.size()));
+
+        updateCudaParameters();
+        fromMassPointers<<<massBlocksPerGrid, THREADS_PER_BLOCK>>>(temp, temp_data, c -> masses.size());
+        gpuErrchk(cudaFree(temp));
+
+        CUDA_MASS * h_mass = new CUDA_MASS[masses.size()];
+        gpuErrchk(cudaMemcpy(h_mass, temp_data, sizeof(CUDA_MASS) * masses.size(), cudaMemcpyDeviceToHost));
+        gpuErrchk(cudaFree(temp_data));
+
+        int count = 0;
+
+        for (Mass * m : c -> masses) {
+            *m = h_mass[count];
+            count++;
+        }
+
+        delete [] h_mass;
     }
 
-    delete [] h_mass;
-}
+    void Simulation::massFromArray() {
+        CUDA_MASS * temp;
+        gpuErrchk(cudaMalloc((void **) &temp, sizeof(CUDA_MASS) * masses.size()));
 
-void Simulation::massFromArray() {
-    CUDA_MASS * temp;
-    gpuErrchk(cudaMalloc((void **) &temp, sizeof(CUDA_MASS) * masses.size()));
+        fromMassPointers<<<massBlocksPerGrid, THREADS_PER_BLOCK>>>(d_mass, temp, masses.size());
 
-    fromMassPointers<<<massBlocksPerGrid, THREADS_PER_BLOCK>>>(d_mass, temp, masses.size());
+        CUDA_MASS * h_mass = new CUDA_MASS[masses.size()];
+        gpuErrchk(cudaMemcpy(h_mass, temp, sizeof(CUDA_MASS) * masses.size(), cudaMemcpyDeviceToHost));
+        gpuErrchk(cudaFree(temp));
 
-    CUDA_MASS * h_mass = new CUDA_MASS[masses.size()];
-    gpuErrchk(cudaMemcpy(h_mass, temp, sizeof(CUDA_MASS) * masses.size(), cudaMemcpyDeviceToHost));
-    gpuErrchk(cudaFree(temp));
+        int count = 0;
 
-    int count = 0;
+        Mass temp_data;
 
-    Mass temp_data;
+        for (Mass * m : masses) {
+            *m = h_mass[count];
+            count++;
+        }
 
-    for (Mass * m : masses) {
-        *m = h_mass[count];
-        count++;
-    }
-
-    delete [] h_mass;
+        delete [] h_mass;
 
 //    cudaFree(d_mass);
-}
-
-void Simulation::springFromArray() {
-}
-
-void Simulation::constraintsFromArray() {
-}
-
-void Simulation::fromArray() {
-    massFromArray();
-    springFromArray();
-    constraintsFromArray();
-}
-
-__global__ void printMasses(CUDA_MASS ** d_masses, int num_masses) {
-    int i = blockDim.x * blockIdx.x + threadIdx.x;
-
-    if (i < num_masses) {
-        CUDA_MASS data = *d_masses[i];
-        printf("%d: (%3f, %3f, %3f)", i, data.pos[0], data.pos[1], data.pos[2]);
     }
-}
 
-__global__ void printForce(CUDA_MASS ** d_masses, int num_masses) {
-    int i = blockDim.x * blockIdx.x + threadIdx.x;
-
-    if (i < num_masses) {
-        Vec & data = d_masses[i] -> force;
-        printf("%d: (%3f, %3f, %3f)\n", i, data[0], data[1], data[2]);
+    void Simulation::springFromArray() {
     }
-}
 
-__global__ void printSpring(CUDA_SPRING ** d_springs, int num_springs) {
-    int i = blockDim.x * blockIdx.x + threadIdx.x;
-
-    if (i < num_springs) {
-        CUDA_SPRING data = *d_springs[i];
-        printf("%d: left: (%5f, %5f, %5f), right:  (%5f, %5f, %5f), k: %f, rest: %f\n ", i, data._left -> pos[0], data._left -> pos[1], data._left -> pos[2], data._right -> pos[0], data._right -> pos[1], data._right -> pos[2], data._k, data._rest);
+    void Simulation::constraintsFromArray() {
     }
-}
 
-__global__ void computeSpringForces(CUDA_SPRING ** d_spring, int num_springs, double t) {
+    void Simulation::fromArray() {
+        massFromArray();
+        springFromArray();
+        constraintsFromArray();
+    }
 
-    // use shared memory to compute spring forces
-    // each thread computes the force on one mass
-    // each block computes the force on one spring
-    // each block has 2 threads, one for each mass
-    extern __shared__ float shMemArray[];
+    __global__ void printMasses(CUDA_MASS ** d_masses, int num_masses) {
+        int i = blockDim.x * blockIdx.x + threadIdx.x;
 
-    int i = blockDim.x * blockIdx.x + threadIdx.x;
+        if (i < num_masses) {
+            CUDA_MASS data = *d_masses[i];
+            printf("%d: (%3f, %3f, %3f)", i, data.pos[0], data.pos[1], data.pos[2]);
+        }
+    }
 
-    if ( i < num_springs ) {
-        CUDA_SPRING & spring = *d_spring[i];
+    __global__ void printForce(CUDA_MASS ** d_masses, int num_masses) {
+        int i = blockDim.x * blockIdx.x + threadIdx.x;
 
-        if (spring._left == nullptr || spring._right == nullptr || ! spring._left -> valid || ! spring._right -> valid) // TODO might be expensive with CUDA instruction set
-            return;
+        if (i < num_masses) {
+            Vec & data = d_masses[i] -> force;
+            printf("%d: (%3f, %3f, %3f)\n", i, data[0], data[1], data[2]);
+        }
+    }
 
-        Vec temp = (spring._right -> pos) - (spring._left -> pos);
+    __global__ void printSpring(CUDA_SPRING ** d_springs, int num_springs) {
+        int i = blockDim.x * blockIdx.x + threadIdx.x;
 
-        double scale = 1.0;
-        if (spring._type == ACTIVE_CONTRACT_THEN_EXPAND){
-            scale = (1 - 0.2 * sin(spring._omega * t));
-        } else if (spring._type == ACTIVE_EXPAND_THEN_CONTRACT){
-            scale = (1 + 0.2 * sin(spring._omega * t));
-	    }
+        if (i < num_springs) {
+            CUDA_SPRING data = *d_springs[i];
+            printf("%d: left: (%5f, %5f, %5f), right:  (%5f, %5f, %5f), k: %f, rest: %f\n ", i, data._left -> pos[0], data._left -> pos[1], data._left -> pos[2], data._right -> pos[0], data._right -> pos[1], data._right -> pos[2], data._k, data._rest);
+        }
+    }
 
-        Vec force = spring._k * (spring._rest * scale - temp.norm()) * (temp / temp.norm()); // normal spring force
-        force += dot(spring._left -> vel - spring._right -> vel, temp / temp.norm()) * spring._damping * (temp / temp.norm()); // damping
+    __global__ void computeSpringForces(CUDA_SPRING ** d_spring, int num_springs, double t) {
+
+        // use shared memory to compute spring forces
+        // each thread computes the force on one mass
+        // each block computes the force on one spring
+        // each block has 2 threads, one for each mass
+
+        int i = blockDim.x * blockIdx.x + threadIdx.x;
+
+
+        if ( i < num_springs ) {
+            CUDA_SPRING & spring = *d_spring[i];
+
+            if (spring._left == nullptr || spring._right == nullptr || ! spring._left -> valid || ! spring._right -> valid) // TODO might be expensive with CUDA instruction set
+                return;
+
+            Vec temp = (spring._right -> pos) - (spring._left -> pos);
+
+            double scale = 1.0;
+            if (spring._type == ACTIVE_CONTRACT_THEN_EXPAND){
+                scale = (1 - 0.2 * sin(spring._omega * t));
+            } else if (spring._type == ACTIVE_EXPAND_THEN_CONTRACT){
+                scale = (1 + 0.2 * sin(spring._omega * t));
+            }
+
+            Vec force = spring._k * (spring._rest * scale - temp.norm()) * (temp / temp.norm()); // normal spring force
+            force += dot(spring._left -> vel - spring._right -> vel, temp / temp.norm()) * spring._damping * (temp / temp.norm()); // damping
 
 #ifdef CONSTRAINTS
-        if (spring._right -> constraints.fixed == false) {
-            spring._right->force.atomicVecAdd(force); // need atomics here
-//            spring._right -> force.VecAdd(force);
+            if (spring._right -> constraints.fixed == false) {
+//            spring._right->force.atomicVecAdd(force); // need atomics here
+            spring._right -> force.VecAdd(force);
 //            spring._right -> force += force;
         }
         if (spring._left -> constraints.fixed == false) {
-            spring._left->force.atomicVecAdd(-force);
-//            spring._left -> force.VecAdd(-force);
+//            spring._left->force.atomicVecAdd(-force);
+            spring._left -> force.VecAdd(-force);
 //            spring._left -> force -= force;
         }
 
 
 #else
-        spring._right -> force.atomicVecAdd(force);
-        spring._left -> force.atomicVecAdd(-force);
+//        spring._right -> force.atomicVecAdd(force);
+//        spring._left -> force.atomicVecAdd(-force);
 
-//        spring._right -> force.VecAdd(force);
-//        spring._left -> force.VecAdd(-force);
-
-//        spring._right -> force += force;
-//        spring._left -> force -= force;
+            spring._right -> force.VecAdd(force);
+            spring._left -> force.VecAdd(-force);
 #endif
 
+        }
     }
-}
 
-//    __global__ void computeSpringForces(CUDA_SPRING ** d_spring, int num_springs, double t) {
-//        __shared__ Vec forces[256];
-//
-//        int i = blockDim.x * blockIdx.x + threadIdx.x;
-//
-//        if ( i < num_springs ) {
-//            CUDA_SPRING & spring = *d_spring[i];
-//
-//            if (spring._left == nullptr || spring._right == nullptr || ! spring._left -> valid || ! spring._right -> valid)
-//                return;
-//
-//            Vec temp = (spring._right -> pos) - (spring._left -> pos);
-//
-//            double scale = 1.0;
-//            if (spring._type == ACTIVE_CONTRACT_THEN_EXPAND){
-//                scale = (1 - 0.2 * sin(spring._omega * t));
-//            } else if (spring._type == ACTIVE_EXPAND_THEN_CONTRACT){
-//                scale = (1 + 0.2 * sin(spring._omega * t));
-//            }
-//
-//            Vec force = spring._k * (spring._rest * scale - temp.norm()) * (temp / temp.norm()); // normal spring force
-//            force += dot(spring._left -> vel - spring._right -> vel, temp / temp.norm()) * spring._damping * (temp / temp.norm()); // damping
-//
-//            forces[threadIdx.x] = force;
-//            __syncthreads();
-//
-//#ifdef CONSTRAINTS
-//            if (spring._right -> constraints.fixed == false) {
-//            spring._right->force += forces[threadIdx.x];
-//        }
-//        if (spring._left -> constraints.fixed == false) {
-//            spring._left->force -= forces[threadIdx.x];
-//        }
-//#else
-//            spring._right -> force += forces[threadIdx.x];
-//            spring._left -> force -= forces[threadIdx.x];
-//#endif
-//        }
-//    }
+    double Simulation::time() {
+        return this -> T;
+    }
 
-//    __global__ void computeSpringForces(CUDA_SPRING ** d_spring, int num_springs, double t) {
-//
-//        __shared__ CUDA_SPRING spring;
-//        __shared__ Vec temp, force;
-//
-//        int i = blockDim.x * blockIdx.x + threadIdx.x;
-//
-//        if (i < num_springs) {
-//            spring = *d_spring[i];
-//
-//            if (spring._left == nullptr || spring._right == nullptr || !spring._left->valid ||
-//                !spring._right->valid) // TODO might be expensive with CUDA instruction set
-//                return;
-//
-//            temp = (spring._right->pos) - (spring._left->pos);
-//
-//            double scale = 1.0;
-//            if (spring._type == ACTIVE_CONTRACT_THEN_EXPAND) {
-//                scale = (1 - 0.2 * sin(spring._omega * t));
-//            } else if (spring._type == ACTIVE_EXPAND_THEN_CONTRACT) {
-//                scale = (1 + 0.2 * sin(spring._omega * t));
-//            }
-//
-//            force = spring._k * (spring._rest * scale - temp.norm()) * (temp / temp.norm()); // normal spring force
-//            force += dot(spring._left->vel - spring._right->vel, temp / temp.norm()) * spring._damping *
-//                     (temp / temp.norm()); // damping
-//
-//            //use atomicCAS
-//            if (spring._right->constraints.fixed == false) {
-//                int oldValue = atomicCAS(&spring._right->force, spring._right->force, spring._right->force + force);
-//                if (oldValue == spring._right->force)
-//                    spring._right->force += force;
-//            }
-//            if (spring._left->constraints.fixed == false) {
-//                int oldValue = atomicCAS(&spring._left->force, spring._left->force, spring._left->force - force);
-//                if (oldValue == spring._left->force)
-//                    spring._left->force -= force;
-//            }
-//
-//        }
-//    }
-//
-//
-//    double Simulation::time() {
-//    return this -> T;
-//}
-
-bool Simulation::running() {
-    return this -> RUNNING;
-}
+    bool Simulation::running() {
+        return this -> RUNNING;
+    }
 
 #ifdef RK2
-template <bool step>
+    template <bool step>
 #endif
-__global__ void massForcesAndUpdate(CUDA_MASS ** d_mass, int num_masses, double dt, double T, Vec global_acc, CUDA_GLOBAL_CONSTRAINTS c) {
-    int i = blockDim.x * blockIdx.x + threadIdx.x;
+    __global__ void massForcesAndUpdate(CUDA_MASS ** d_mass, int num_masses, double dt, double T, Vec global_acc, CUDA_GLOBAL_CONSTRAINTS c) {
+        int i = blockDim.x * blockIdx.x + threadIdx.x;
 
-    if (i < num_masses) {
-        CUDA_MASS &mass = *d_mass[i];
+        if (i < num_masses) {
+            CUDA_MASS &mass = *d_mass[i];
 
 #ifdef CONSTRAINTS
-        if (mass.constraints.fixed == 1)
+            if (mass.constraints.fixed == 1)
             return;
 #endif
 
-        mass.force += mass.m * global_acc;
-        mass.force += mass.extern_force;
+            mass.force += mass.m * global_acc;
+            mass.force += mass.extern_force;
 
-        // mass.force += mass.external;
+            // mass.force += mass.external;
 
-        for (int j = 0; j < c.num_planes; j++) { // global constraints
-            c.d_planes[j].applyForce(&mass);
-        }
-        
-        for (int j = 0; j < c.num_balls; j++) {
-            c.d_balls[j].applyForce(&mass);
-        }
+            for (int j = 0; j < c.num_planes; j++) { // global constraints
+                c.d_planes[j].applyForce(&mass);
+            }
+
+            for (int j = 0; j < c.num_balls; j++) {
+                c.d_balls[j].applyForce(&mass);
+            }
 
 #ifdef CONSTRAINTS
-        for (int j = 0; j < mass.constraints.num_contact_planes; j++) { // local constraints
+            for (int j = 0; j < mass.constraints.num_contact_planes; j++) { // local constraints
             mass.constraints.contact_plane[j].applyForce(&mass);
         }
 
@@ -1235,7 +1145,7 @@ __global__ void massForcesAndUpdate(CUDA_MASS ** d_mass, int num_masses, double 
         for (int j = 0; j < mass.constraints.num_directions; j++) {
             mass.constraints.direction[j].applyForce(&mass);
         }
-        
+
         // NOTE TODO this is really janky. On certain platforms, the following code causes excessive memory usage on the GPU.
         if (mass.vel.norm() != 0.0) {
             double norm = mass.vel.norm();
@@ -1244,7 +1154,7 @@ __global__ void massForcesAndUpdate(CUDA_MASS ** d_mass, int num_masses, double 
 #endif
 
 #ifdef RK2
-        if constexpr(step) {
+            if constexpr(step) {
             mass.acc = mass.force / mass.m;
             mass.__rk2_backup_vel = mass.vel;
             mass.__rk2_backup_pos = mass.pos;
@@ -1259,22 +1169,22 @@ __global__ void massForcesAndUpdate(CUDA_MASS ** d_mass, int num_masses, double 
             mass.T += 0.5 * dt;
         }
 #elif VERLET
-        mass.vel += 0.5 * (mass.acc + mass.force / mass.m) * dt;
+            mass.vel += 0.5 * (mass.acc + mass.force / mass.m) * dt;
         mass.acc = mass.force / mass.m;
         mass.pos += mass.vel * dt + 0.5 * mass.acc * pow(dt, 2);
         mass.T += dt;
 #else // simple leapfrog Euler integration
-        mass.acc = mass.force / mass.m;
-        mass.vel = mass.vel + mass.acc * dt;
-        mass.pos = mass.pos + mass.vel * dt;
-        mass.T += dt;
+            mass.acc = mass.force / mass.m;
+            mass.vel = mass.vel + mass.acc * dt;
+            mass.pos = mass.pos + mass.vel * dt;
+            mass.T += dt;
 #endif
-        mass.force = Vec(0, 0, 0);
+            mass.force = Vec(0, 0, 0);
+        }
     }
-}
 
 #ifdef GRAPHICS
-void Simulation::clearScreen() {
+    void Simulation::clearScreen() {
     // Clear the screen
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // clear screen
 
@@ -1421,83 +1331,83 @@ void Simulation::createGLFWWindow() {
 #endif
 #endif
 
-void Simulation::stop() { // no race condition actually
-    if (RUNNING) {
-        setBreakpoint(time());
-        waitForEvent();
+    void Simulation::stop() { // no race condition actually
+        if (RUNNING) {
+            setBreakpoint(time());
+            waitForEvent();
+        }
+
+        ENDED = true;
+
+        freeGPU();
+
+        FREED = true;
+
+        return;
     }
 
-    ENDED = true;
+    void Simulation::stop(double t) {
+        if (RUNNING) {
+            setBreakpoint(t);
+            waitForEvent();
+        }
 
-    freeGPU();
+        ENDED = true;
 
-    FREED = true;
+        freeGPU();
 
-    return;
-}
+        FREED = true;
 
-void Simulation::stop(double t) {
-    if (RUNNING) {
-        setBreakpoint(t);
-        waitForEvent();
+        return;
     }
 
-    ENDED = true;
+    void Simulation::start() {
+        if (ENDED) {
+            throw std::runtime_error("The simulation has ended. Cannot call sim.start() after the end of the simulation.");
+        }
 
-    freeGPU();
+        if (masses.size() == 0) {
+            throw std::runtime_error("No masses have been added. Please add masses before starting the simulation.");
+        }
 
-    FREED = true;
+        std::cout << "Starting simulation with " << masses.size() << " masses and " << springs.size() << " springs." << std::endl;
 
-    return;
-}
+        RUNNING = true;
+        STARTED = true;
 
-void Simulation::start() {
-    if (ENDED) {
-        throw std::runtime_error("The simulation has ended. Cannot call sim.start() after the end of the simulation.");
-    }
-
-    if (masses.size() == 0) {
-        throw std::runtime_error("No masses have been added. Please add masses before starting the simulation.");
-    }
-
-    std::cout << "Starting simulation with " << masses.size() << " masses and " << springs.size() << " springs." << std::endl;
-
-    RUNNING = true;
-    STARTED = true;
-
-    T = 0;
-    if (this -> dt <= 0) {
-        throw std::runtime_error("Simultation timestep Simulation::dt is invalid. Please choose a positive non-zero value.");
-    }
+        T = 0;
+        if (this -> dt <= 0) {
+            throw std::runtime_error("Simultation timestep Simulation::dt is invalid. Please choose a positive non-zero value.");
+        }
 
 #ifdef GRAPHICS // SDL2 window needs to be created here for Mac OS
-#ifdef SDL2
+        #ifdef SDL2
     createSDLWindow();
 #endif
 #endif
 
-    updateCudaParameters();
+        updateCudaParameters();
 
-    d_constraints.d_balls = thrust::raw_pointer_cast(&d_balls[0]);
-    d_constraints.d_planes = thrust::raw_pointer_cast(&d_planes[0]);
-    d_constraints.num_balls = d_balls.size();
-    d_constraints.num_planes = d_planes.size();
+        d_constraints.d_balls = thrust::raw_pointer_cast(&d_balls[0]);
+        d_constraints.d_planes = thrust::raw_pointer_cast(&d_planes[0]);
+        d_constraints.num_balls = d_balls.size();
+        d_constraints.num_planes = d_planes.size();
 
-    update_constraints = false;
+        update_constraints = false;
 
 //    cudaDeviceSetLimit(cudaLimitMallocHeapSize, 5 * (masses.size() * sizeof(CUDA_MASS) + springs.size() * sizeof(CUDA_SPRING)));
-    toArray();
+        toArray();
 
-    d_mass = thrust::raw_pointer_cast(d_masses.data());
-    d_spring = thrust::raw_pointer_cast(d_springs.data());
+        d_mass = thrust::raw_pointer_cast(d_masses.data());
+        d_spring = thrust::raw_pointer_cast(d_springs.data());
 
-    gpu_thread = std::thread(&Simulation::_run, this);
-}
+        gpu_thread = std::thread(&Simulation::_run, this);
+    }
 
-void Simulation::_run() { // repeatedly start next
+    void Simulation::_run() { // repeatedly start next
 #ifdef GRAPHICS
 
-#ifndef SDL2 // GLFW window needs to be created here for Windows
+        #ifndef SDL2 // GLFW window needs to be created here for Windows
     createGLFWWindow();
 #endif
 
@@ -1527,13 +1437,13 @@ void Simulation::_run() { // repeatedly start next
 
 #endif
 
-    execute();
+        execute();
 
-    GPU_DONE = true;
-}
+        GPU_DONE = true;
+    }
 
 #ifdef GRAPHICS
-glm::mat4 & Simulation::getProjectionMatrix() {
+    glm::mat4 & Simulation::getProjectionMatrix() {
     return this -> MVP;
 }
 
@@ -1565,64 +1475,64 @@ void Simulation::moveViewport(const Vec & displacement) {
 }
 #endif
 
-void Simulation::updateCudaParameters() {
-    massBlocksPerGrid = (masses.size() + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
-    springBlocksPerGrid = (springs.size() + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
+    void Simulation::updateCudaParameters() {
+        massBlocksPerGrid = (masses.size() + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
+        springBlocksPerGrid = (springs.size() + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
 
-    if (massBlocksPerGrid > MAX_BLOCKS) {
-        massBlocksPerGrid = MAX_BLOCKS;
+        if (massBlocksPerGrid > MAX_BLOCKS) {
+            massBlocksPerGrid = MAX_BLOCKS;
+        }
+
+        if (springBlocksPerGrid > MAX_BLOCKS) {
+            springBlocksPerGrid = MAX_BLOCKS;
+        }
+
+        if (springBlocksPerGrid == 0) {
+            springBlocksPerGrid = 1;
+        }
+
+        d_mass = thrust::raw_pointer_cast(d_masses.data());
+        d_spring = thrust::raw_pointer_cast(d_springs.data());
     }
 
-    if (springBlocksPerGrid > MAX_BLOCKS) {
-        springBlocksPerGrid = MAX_BLOCKS;
+    void Simulation::resume() {
+        if (ENDED) {
+            throw std::runtime_error("The simulation has ended. Cannot resume the simulation.");
+        }
+
+        if (!STARTED) {
+            throw std::runtime_error("The simulation has not started. You cannot resume a simulation before calling sim.start().");
+        }
+
+        if (masses.size() == 0) {
+            throw std::runtime_error("No masses have been added. Please add masses before starting the simulation.");
+        }
+
+        updateCudaParameters();
+
+        cudaDeviceSynchronize();
+
+        RUNNING = true;
     }
 
-    if (springBlocksPerGrid == 0) {
-        springBlocksPerGrid = 1;
-    }
+    void Simulation::execute() {
+        while (1) {
+            if (!bpts.empty() && *bpts.begin() <= T) {
+                cudaDeviceSynchronize(); // synchronize before updating the springs and mass positions
+                //            std::cout << "Breakpoint set for time " << *bpts.begin() << " reached at simulation time " << T << "!" << std::endl;
+                bpts.erase(bpts.begin());
+                RUNNING = false;
 
-    d_mass = thrust::raw_pointer_cast(d_masses.data());
-    d_spring = thrust::raw_pointer_cast(d_springs.data());
-}
+                while (!RUNNING) {
+                    std::this_thread::sleep_for(std::chrono::microseconds(1));
 
-void Simulation::resume() {
-    if (ENDED) {
-        throw std::runtime_error("The simulation has ended. Cannot resume the simulation.");
-    }
-
-    if (!STARTED) {
-        throw std::runtime_error("The simulation has not started. You cannot resume a simulation before calling sim.start().");
-    }
-
-    if (masses.size() == 0) {
-        throw std::runtime_error("No masses have been added. Please add masses before starting the simulation.");
-    }
-
-    updateCudaParameters();
-
-    cudaDeviceSynchronize();
-
-    RUNNING = true;
-}
-
-void Simulation::execute() {
-    while (1) {
-        if (!bpts.empty() && *bpts.begin() <= T) {
-            cudaDeviceSynchronize(); // synchronize before updating the springs and mass positions
-	    //            std::cout << "Breakpoint set for time " << *bpts.begin() << " reached at simulation time " << T << "!" << std::endl;
-            bpts.erase(bpts.begin());
-            RUNNING = false;
-
-            while (!RUNNING) {
-                std::this_thread::sleep_for(std::chrono::microseconds(1));
-
-                if (ENDED) {
-                    for (Constraint * c : constraints)  {
-                        delete c;
-                    }
+                    if (ENDED) {
+                        for (Constraint * c : constraints)  {
+                            delete c;
+                        }
 
 #ifdef GRAPHICS
-                    glDeleteBuffers(1, &vertices);
+                        glDeleteBuffers(1, &vertices);
                     glDeleteBuffers(1, &colors);
                     glDeleteBuffers(1, &indices);
                     glDeleteProgram(programID);
@@ -1639,12 +1549,12 @@ void Simulation::execute() {
 #endif
 #endif
 
-                    return;
+                        return;
+                    }
                 }
-            }
-            
+
 #ifdef GRAPHICS
-            if (resize_buffers) {
+                if (resize_buffers) {
                 resizeBuffers(); // needs to be run from GPU thread
                 resize_buffers = false;
                 update_colors = true;
@@ -1653,7 +1563,7 @@ void Simulation::execute() {
 #endif
 
 #ifdef CONSTRAINTS
-            if (update_constraints) {
+                if (update_constraints) {
                 d_constraints.d_balls = thrust::raw_pointer_cast(&d_balls[0]);
                 d_constraints.d_planes = thrust::raw_pointer_cast(&d_planes[0]);
                 d_constraints.num_balls = d_balls.size();
@@ -1668,49 +1578,49 @@ void Simulation::execute() {
                 update_constraints = false;
             }
 #endif
-            continue;
-        }
+                continue;
+            }
 
-        gpuErrchk( cudaPeekAtLastError() );
-        cudaDeviceSynchronize(); // synchronize before updating the springs and mass positions
-                
+            gpuErrchk( cudaPeekAtLastError() );
+            cudaDeviceSynchronize(); // synchronize before updating the springs and mass positions
+
 #ifdef RK2
-        computeSpringForces<<<springBlocksPerGrid, THREADS_PER_BLOCK,THREADS_PER_BLOCK*sizeof(d_spring)>>>(d_spring, springs.size(), T); // compute mass forces after syncing
+            computeSpringForces<<<springBlocksPerGrid, THREADS_PER_BLOCK>>>(d_spring, springs.size(), T); // compute mass forces after syncing
         gpuErrchk( cudaPeekAtLastError() );
         massForcesAndUpdate<true><<<massBlocksPerGrid, THREADS_PER_BLOCK>>>(d_mass, masses.size(), dt, T, _global_acc, d_constraints);
         gpuErrchk( cudaPeekAtLastError() );
         T += 0.5 * dt;
 
-        computeSpringForces<<<springBlocksPerGrid, THREADS_PER_BLOCK,THREADS_PER_BLOCK*sizeof(d_spring)>>>(d_spring, springs.size(), T); // compute mass forces after syncing
+        computeSpringForces<<<springBlocksPerGrid, THREADS_PER_BLOCK>>>(d_spring, springs.size(), T); // compute mass forces after syncing
         gpuErrchk( cudaPeekAtLastError() );
         massForcesAndUpdate<false><<<massBlocksPerGrid, THREADS_PER_BLOCK>>>(d_mass, masses.size(), dt, T, _global_acc, d_constraints);
         gpuErrchk( cudaPeekAtLastError() );
         T += 0.5 * dt;
 #else
-        //compute time taken by kernel
-        cudaEvent_t start, stop;
-        cudaEventCreate(&start);
-        cudaEventCreate(&stop);
-        cudaEventRecord(start, 0);
+            //compute time taken by kernel
+            cudaEvent_t start, stop;
+            cudaEventCreate(&start);
+            cudaEventCreate(&stop);
+            cudaEventRecord(start, 0);
 
 
-        computeSpringForces<<<springBlocksPerGrid, THREADS_PER_BLOCK,THREADS_PER_BLOCK*sizeof(d_spring)>>>(d_spring, springs.size(), T); // compute mass forces after syncing
-        cudaEventRecord(stop,0);
-        cudaEventSynchronize(stop);
-        float time;
-        cudaEventElapsedTime(&time, start, stop);
-        std::cout << "Copmute Spring Forces Kernel:" << time << std::endl;
+            computeSpringForces<<<springBlocksPerGrid, THREADS_PER_BLOCK>>>(d_spring, springs.size(), T); // compute mass forces after syncing
+            cudaEventRecord(stop,0);
+            cudaEventSynchronize(stop);
+            float time;
+            cudaEventElapsedTime(&time, start, stop);
+            std::cout << "Copmute Spring Forces Kernel:" << time << std::endl;
 
-        gpuErrchk( cudaPeekAtLastError() );
+            gpuErrchk( cudaPeekAtLastError() );
 
 
-        massForcesAndUpdate<<<massBlocksPerGrid, THREADS_PER_BLOCK>>>(d_mass, masses.size(), dt, T, _global_acc, d_constraints);
-        gpuErrchk( cudaPeekAtLastError() );
-        T += dt;
+            massForcesAndUpdate<<<massBlocksPerGrid, THREADS_PER_BLOCK>>>(d_mass, masses.size(), dt, T, _global_acc, d_constraints);
+            gpuErrchk( cudaPeekAtLastError() );
+            T += dt;
 #endif
 
 #ifdef GRAPHICS
-        if (fmod(T, 0.01) < dt) {
+            if (fmod(T, 0.01) < dt) {
             clearScreen();
 
             updateBuffers();
@@ -1732,52 +1642,52 @@ void Simulation::execute() {
         }
 #endif
 
-    }
-}
-
-void Simulation::pause(double t) {
-    if (ENDED) {
-        throw std::runtime_error("The simulation has ended. Control functions cannot be called.");
+        }
     }
 
-    setBreakpoint(t);
-    waitForEvent();
-}
+    void Simulation::pause(double t) {
+        if (ENDED) {
+            throw std::runtime_error("The simulation has ended. Control functions cannot be called.");
+        }
 
-void Simulation::wait(double t) {
-    if (ENDED) {
-        throw std::runtime_error("The simulation has ended. Control functions cannot be called.");
+        setBreakpoint(t);
+        waitForEvent();
     }
 
-    double current_time = time();
-    while (RUNNING && time() <= current_time + t) {
-        std::this_thread::sleep_for(std::chrono::microseconds(10)); // TODO replace this with wait queue. 
-    }
-}
+    void Simulation::wait(double t) {
+        if (ENDED) {
+            throw std::runtime_error("The simulation has ended. Control functions cannot be called.");
+        }
 
-void Simulation::waitUntil(double t) {
-    if (ENDED && !FREED) {
-        throw std::runtime_error("The simulation has ended. Control functions cannot be called.");
-    }
-
-    while (RUNNING && time() <= t) {
-        std::this_thread::sleep_for(std::chrono::microseconds(10));
-    }
-}
-
-void Simulation::waitForEvent() {
-    if (ENDED && !FREED) {
-        throw std::runtime_error("The simulation has ended. Control functions cannot be called.");
+        double current_time = time();
+        while (RUNNING && time() <= current_time + t) {
+            std::this_thread::sleep_for(std::chrono::microseconds(10)); // TODO replace this with wait queue.
+        }
     }
 
-    while (RUNNING) {
-        std::this_thread::sleep_for(std::chrono::microseconds(10));
+    void Simulation::waitUntil(double t) {
+        if (ENDED && !FREED) {
+            throw std::runtime_error("The simulation has ended. Control functions cannot be called.");
+        }
+
+        while (RUNNING && time() <= t) {
+            std::this_thread::sleep_for(std::chrono::microseconds(10));
+        }
     }
-}
+
+    void Simulation::waitForEvent() {
+        if (ENDED && !FREED) {
+            throw std::runtime_error("The simulation has ended. Control functions cannot be called.");
+        }
+
+        while (RUNNING) {
+            std::this_thread::sleep_for(std::chrono::microseconds(10));
+        }
+    }
 
 #ifdef GRAPHICS
 
-void Simulation::resizeBuffers() {
+    void Simulation::resizeBuffers() {
 //    std::cout << "resizing buffers (" << masses.size() << " masses, " << springs.size() << " springs)." << std::endl;
 //    std::cout << "resizing buffers (" << d_masses.size() << " device masses, " << d_springs.size() << " device springs)." << std::endl;
     {
@@ -1942,128 +1852,128 @@ void Simulation::draw() {
 
 #endif
 
-Container * Simulation::createContainer() {
-    Container * c = new Container();
-    containers.push_back(c);
-    return c;
-}
-
-Cube * Simulation::createCube(const Vec & center, double side_length) { // creates half-space ax + by + cz < d
-    if (ENDED) {
-        throw std::runtime_error("The simulation has ended. Cannot create new objects");
+    Container * Simulation::createContainer() {
+        Container * c = new Container();
+        containers.push_back(c);
+        return c;
     }
 
-    Cube * cube = new Cube(center, side_length);
-
-    d_masses.reserve(masses.size() + cube -> masses.size());
-    d_springs.reserve(springs.size() + cube -> springs.size());
-
-    for (Mass * m : cube -> masses) {
-        createMass(m);
-    }
-
-    for (Spring * s : cube -> springs) {
-        createSpring(s);
-    }
-
-    containers.push_back(cube);
-
-    return cube;
-}
-
-Container * Simulation::importFromSTL(const std::string & path, double density, int num_rays) {
-    if (ENDED) {
-        throw std::runtime_error("The simulation has ended. Cannot import new STL objects");
-    }
-
-    stl::stlFile file = stl::parseSTL(path);
-    stl::BBox b = file.getBoundingBox();
-
-    double dimmax = max(max(b.xdim, b.ydim), b.zdim);
-
-    double dimx, dimy, dimz;
-
-    dimx = 10 * b.xdim / dimmax;
-    dimy = 10 * b.ydim / dimmax;
-    dimz = 10 * b.zdim / dimmax;
-
-    std::cout << b.xdim << " " << b.ydim << " " << b.zdim << " " << dimmax << " " << pow(10 / dimmax, 3) << " " << density * pow(10 / dimmax, 3) * b.xdim * b.ydim * b.zdim << " " << (int) cbrt(density * pow(10 / dimmax, 3) * b.xdim * b.ydim * b.zdim) << std::endl;
-
-    int num_pts = (int) cbrt(density * pow(10 / dimmax, 3) * b.xdim * b.ydim * b.zdim);
-
-    std::cout << "density is: " << density << " and num_pts is " << num_pts << std::endl;
-
-    Lattice * l1 = new Lattice(Vec(0, 0, dimz), Vec(dimx - 0.001, dimy - 0.001, dimz - 0.001), num_pts, num_pts, num_pts);
-
-    for (Mass * m : l1 -> masses) {
-        if (!file.inside(stl::Vec3D(b.center[0] + (b.xdim / dimx) * m -> pos[0], b.center[1] + (b.ydim / dimy) * m -> pos[1], (b.zdim / dimz) * (m -> pos[2] - dimz) + b.center[2]), num_rays)) {
-            m -> valid = false;
+    Cube * Simulation::createCube(const Vec & center, double side_length) { // creates half-space ax + by + cz < d
+        if (ENDED) {
+            throw std::runtime_error("The simulation has ended. Cannot create new objects");
         }
-    }
 
-    for (auto i = l1 -> springs.begin(); i != l1 -> springs.end();) {
-        Spring * s = *i;
+        Cube * cube = new Cube(center, side_length);
 
-        if (!s ->_left -> valid || ! s -> _right -> valid) {
-            delete s;
-            i = l1 -> springs.erase(i);
-        } else {
-            ++i;
+        d_masses.reserve(masses.size() + cube -> masses.size());
+        d_springs.reserve(springs.size() + cube -> springs.size());
+
+        for (Mass * m : cube -> masses) {
+            createMass(m);
         }
-    }
 
-    for (auto i = l1 -> masses.begin(); i != l1 -> masses.end();) {
-        Mass * m = *i;
-
-        if (!m -> valid) {
-            delete m;
-            i = l1 -> masses.erase(i);
-        } else {
-            ++i;
+        for (Spring * s : cube -> springs) {
+            createSpring(s);
         }
+
+        containers.push_back(cube);
+
+        return cube;
     }
 
-    d_masses.reserve(masses.size() + l1 -> masses.size());
-    d_springs.reserve(springs.size() + l1 -> springs.size());
+    Container * Simulation::importFromSTL(const std::string & path, double density, int num_rays) {
+        if (ENDED) {
+            throw std::runtime_error("The simulation has ended. Cannot import new STL objects");
+        }
 
-    for (Mass * m : l1 -> masses) {
-        createMass(m);
+        stl::stlFile file = stl::parseSTL(path);
+        stl::BBox b = file.getBoundingBox();
+
+        double dimmax = max(max(b.xdim, b.ydim), b.zdim);
+
+        double dimx, dimy, dimz;
+
+        dimx = 10 * b.xdim / dimmax;
+        dimy = 10 * b.ydim / dimmax;
+        dimz = 10 * b.zdim / dimmax;
+
+        std::cout << b.xdim << " " << b.ydim << " " << b.zdim << " " << dimmax << " " << pow(10 / dimmax, 3) << " " << density * pow(10 / dimmax, 3) * b.xdim * b.ydim * b.zdim << " " << (int) cbrt(density * pow(10 / dimmax, 3) * b.xdim * b.ydim * b.zdim) << std::endl;
+
+        int num_pts = (int) cbrt(density * pow(10 / dimmax, 3) * b.xdim * b.ydim * b.zdim);
+
+        std::cout << "density is: " << density << " and num_pts is " << num_pts << std::endl;
+
+        Lattice * l1 = new Lattice(Vec(0, 0, dimz), Vec(dimx - 0.001, dimy - 0.001, dimz - 0.001), num_pts, num_pts, num_pts);
+
+        for (Mass * m : l1 -> masses) {
+            if (!file.inside(stl::Vec3D(b.center[0] + (b.xdim / dimx) * m -> pos[0], b.center[1] + (b.ydim / dimy) * m -> pos[1], (b.zdim / dimz) * (m -> pos[2] - dimz) + b.center[2]), num_rays)) {
+                m -> valid = false;
+            }
+        }
+
+        for (auto i = l1 -> springs.begin(); i != l1 -> springs.end();) {
+            Spring * s = *i;
+
+            if (!s ->_left -> valid || ! s -> _right -> valid) {
+                delete s;
+                i = l1 -> springs.erase(i);
+            } else {
+                ++i;
+            }
+        }
+
+        for (auto i = l1 -> masses.begin(); i != l1 -> masses.end();) {
+            Mass * m = *i;
+
+            if (!m -> valid) {
+                delete m;
+                i = l1 -> masses.erase(i);
+            } else {
+                ++i;
+            }
+        }
+
+        d_masses.reserve(masses.size() + l1 -> masses.size());
+        d_springs.reserve(springs.size() + l1 -> springs.size());
+
+        for (Mass * m : l1 -> masses) {
+            createMass(m);
+        }
+
+        for (Spring * s : l1 -> springs) {
+            createSpring(s);
+        }
+
+        containers.push_back(l1);
+
+        return l1;
     }
 
-    for (Spring * s : l1 -> springs) {
-        createSpring(s);
+    Lattice * Simulation::createLattice(const Vec & center, const Vec & dims, int nx, int ny, int nz) {
+        if (ENDED) {
+            throw std::runtime_error("The simulation has ended. New objects cannot be created.");
+        }
+
+        Lattice * l = new Lattice(center, dims, nx, ny, nz);
+
+        d_masses.reserve(masses.size() + l -> masses.size());
+        d_springs.reserve(springs.size() + l -> springs.size());
+
+        for (Mass * m : l -> masses) {
+            createMass(m);
+        }
+
+        for (Spring * s : l -> springs) {
+            createSpring(s);
+        }
+
+        containers.push_back(l);
+
+        return l;
     }
-
-    containers.push_back(l1);
-
-    return l1;
-}
-
-Lattice * Simulation::createLattice(const Vec & center, const Vec & dims, int nx, int ny, int nz) {
-    if (ENDED) {
-        throw std::runtime_error("The simulation has ended. New objects cannot be created.");
-    }
-
-    Lattice * l = new Lattice(center, dims, nx, ny, nz);
-
-    d_masses.reserve(masses.size() + l -> masses.size());
-    d_springs.reserve(springs.size() + l -> springs.size());
-
-    for (Mass * m : l -> masses) {
-        createMass(m);
-    }
-
-    for (Spring * s : l -> springs) {
-        createSpring(s);
-    }
-
-    containers.push_back(l);
-
-    return l;
-}
 
 #ifdef CONSTRAINTS
-Beam * Simulation::createBeam(const Vec & center, const Vec & dims, int nx, int ny, int nz) {
+    Beam * Simulation::createBeam(const Vec & center, const Vec & dims, int nx, int ny, int nz) {
     if (ENDED) {
         throw std::runtime_error("The simulation has ended. New objects cannot be created.");
     }
@@ -2088,15 +1998,15 @@ Beam * Simulation::createBeam(const Vec & center, const Vec & dims, int nx, int 
 #endif
 
 // Robot * Simulation::createRobot(const Vec & center, const cppn& encoding, double side_length,  double omega, double k_soft, double k_stiff){
-  
+
 //     if (ENDED) {
 //         throw std::runtime_error("The simulation has ended. New objects cannot be created.");
 //     }
 
 //     Robot * l = new Robot(center, encoding, side_length, omega, k_soft, k_stiff);
 
-    
-	   
+
+
 //     d_masses.reserve(masses.size() + l -> masses.size());
 //     d_springs.reserve(springs.size() + l -> springs.size());
 
@@ -2114,95 +2024,185 @@ Beam * Simulation::createBeam(const Vec & center, const Vec & dims, int nx, int 
 // }
 
 
-void Simulation::createPlane(const Vec & abc, double d) { // creates half-space ax + by + cz < d
-    if (ENDED) {
-        throw std::runtime_error("The simulation has ended. New objects cannot be created.");
-    }
-
-    ContactPlane * new_plane = new ContactPlane(abc, d);
-    constraints.push_back(new_plane);
-    d_planes.push_back(CudaContactPlane(*new_plane));
-
-    update_constraints = true;
-}
-
-void Simulation::createPlane(const Vec & abc, double d, double FRICTION_K, double FRICTION_S) { // creates half-space ax + by + cz < d
-    if (ENDED) {
-        throw std::runtime_error("The simulation has ended. New objects cannot be created.");
-    }
-
-    ContactPlane * new_plane = new ContactPlane(abc, d);
-    new_plane -> _FRICTION_K = FRICTION_K;
-    new_plane -> _FRICTION_S = FRICTION_S;
-
-    constraints.push_back(new_plane);
-    d_planes.push_back(CudaContactPlane(*new_plane));
-
-    update_constraints = true;
-}
-
-void Simulation::createBall(const Vec & center, double r ) { // creates ball with radius r at position center
-    if (ENDED) {
-        throw std::runtime_error("The simulation has ended. New constraints cannot be added.");
-    }
-
-    Ball * new_ball = new Ball(center, r);
-    constraints.push_back(new_ball);
-    d_balls.push_back(CudaBall(*new_ball));
-
-    update_constraints = true;
-}
-
-void Simulation::clearConstraints() { // clears global constraints only
-    this -> constraints.clear();
-    update_constraints = true;
-}
-
-void Simulation::printPositions() {
-    if (ENDED) {
-        throw std::runtime_error("The simulation has ended. You cannot view parameters of the simulation after it has been stopped.");
-    }
-
-    if (RUNNING) {
-        std::cout << "\nDEVICE MASSES: " << std::endl;
-        printMasses<<<massBlocksPerGrid, THREADS_PER_BLOCK>>>(d_mass, masses.size());
-        cudaDeviceSynchronize();
-    }
-    else {
-        std::cout << "\nHOST MASSES: " << std::endl;
-        int count = 0;
-        for (Mass * m : masses) {
-            std::cout << count << ": " << m -> pos << std::endl;
-            count++;
+    void Simulation::createPlane(const Vec & abc, double d) { // creates half-space ax + by + cz < d
+        if (ENDED) {
+            throw std::runtime_error("The simulation has ended. New objects cannot be created.");
         }
+
+        ContactPlane * new_plane = new ContactPlane(abc, d);
+        constraints.push_back(new_plane);
+        d_planes.push_back(CudaContactPlane(*new_plane));
+
+        update_constraints = true;
     }
 
-    std::cout << std::endl;
-}
+    void Simulation::createPlane(const Vec & abc, double d, double FRICTION_K, double FRICTION_S) { // creates half-space ax + by + cz < d
+        if (ENDED) {
+            throw std::runtime_error("The simulation has ended. New objects cannot be created.");
+        }
 
-void Simulation::printSprings() {
-    if (ENDED) {
-        throw std::runtime_error("The simulation has ended. You cannot view parameters of the simulation after it has been stopped.");
+        ContactPlane * new_plane = new ContactPlane(abc, d);
+        new_plane -> _FRICTION_K = FRICTION_K;
+        new_plane -> _FRICTION_S = FRICTION_S;
+
+        constraints.push_back(new_plane);
+        d_planes.push_back(CudaContactPlane(*new_plane));
+
+        update_constraints = true;
     }
 
-    if (RUNNING) {
-        std::cout << "\nDEVICE SPRINGS: " << std::endl;
-        printSpring<<<springBlocksPerGrid, THREADS_PER_BLOCK>>>(d_spring, springs.size());
-        cudaDeviceSynchronize();
-    }
-    else {
-        std::cout << "\nHOST SPRINGS: " << std::endl;
-    }
+    void Simulation::createBall(const Vec & center, double r ) { // creates ball with radius r at position center
+        if (ENDED) {
+            throw std::runtime_error("The simulation has ended. New constraints cannot be added.");
+        }
 
-    std::cout << std::endl;
-}
+        Ball * new_ball = new Ball(center, r);
+        constraints.push_back(new_ball);
+        d_balls.push_back(CudaBall(*new_ball));
 
-void Simulation::setGlobalAcceleration(const Vec & global_acc) {
-    if (RUNNING) {
-        throw std::runtime_error("The simulation is running. The global force parameter cannot be changed during runtime");
+        update_constraints = true;
     }
 
-    this -> _global_acc = global_acc;
-}
+    void Simulation::clearConstraints() { // clears global constraints only
+        this -> constraints.clear();
+        update_constraints = true;
+    }
+
+    void Simulation::printPositions() {
+        if (ENDED) {
+            throw std::runtime_error("The simulation has ended. You cannot view parameters of the simulation after it has been stopped.");
+        }
+
+        if (RUNNING) {
+            std::cout << "\nDEVICE MASSES: " << std::endl;
+            printMasses<<<massBlocksPerGrid, THREADS_PER_BLOCK>>>(d_mass, masses.size());
+            cudaDeviceSynchronize();
+        }
+        else {
+            std::cout << "\nHOST MASSES: " << std::endl;
+            int count = 0;
+            for (Mass * m : masses) {
+                std::cout << count << ": " << m -> pos << std::endl;
+                count++;
+            }
+        }
+
+        std::cout << std::endl;
+    }
+
+    void Simulation::printSprings() {
+        if (ENDED) {
+            throw std::runtime_error("The simulation has ended. You cannot view parameters of the simulation after it has been stopped.");
+        }
+
+        if (RUNNING) {
+            std::cout << "\nDEVICE SPRINGS: " << std::endl;
+            printSpring<<<springBlocksPerGrid, THREADS_PER_BLOCK>>>(d_spring, springs.size());
+            cudaDeviceSynchronize();
+        }
+        else {
+            std::cout << "\nHOST SPRINGS: " << std::endl;
+        }
+
+        std::cout << std::endl;
+    }
+
+    void Simulation::setGlobalAcceleration(const Vec & global_acc) {
+        if (RUNNING) {
+            throw std::runtime_error("The simulation is running. The global force parameter cannot be changed during runtime");
+        }
+
+        this -> _global_acc = global_acc;
+    }
 
 } // namespace titan
+
+//    __global__ void computeSpringForces(CUDA_SPRING ** d_spring, int num_springs, double t) {
+//        __shared__ Vec forces[256];
+//
+//        int i = blockDim.x * blockIdx.x + threadIdx.x;
+//
+//        if ( i < num_springs ) {
+//            CUDA_SPRING & spring = *d_spring[i];
+//
+//            if (spring._left == nullptr || spring._right == nullptr || ! spring._left -> valid || ! spring._right -> valid)
+//                return;
+//
+//            Vec temp = (spring._right -> pos) - (spring._left -> pos);
+//
+//            double scale = 1.0;
+//            if (spring._type == ACTIVE_CONTRACT_THEN_EXPAND){
+//                scale = (1 - 0.2 * sin(spring._omega * t));
+//            } else if (spring._type == ACTIVE_EXPAND_THEN_CONTRACT){
+//                scale = (1 + 0.2 * sin(spring._omega * t));
+//            }
+//
+//            Vec force = spring._k * (spring._rest * scale - temp.norm()) * (temp / temp.norm()); // normal spring force
+//            force += dot(spring._left -> vel - spring._right -> vel, temp / temp.norm()) * spring._damping * (temp / temp.norm()); // damping
+//
+//            forces[threadIdx.x] = force;
+//            __syncthreads();
+//
+//#ifdef CONSTRAINTS
+//            if (spring._right -> constraints.fixed == false) {
+//            spring._right->force += forces[threadIdx.x];
+//        }
+//        if (spring._left -> constraints.fixed == false) {
+//            spring._left->force -= forces[threadIdx.x];
+//        }
+//#else
+//            spring._right -> force += forces[threadIdx.x];
+//            spring._left -> force -= forces[threadIdx.x];
+//#endif
+//        }
+//    }
+
+//    __global__ void computeSpringForces(CUDA_SPRING ** d_spring, int num_springs, double t) {
+//
+//        __shared__ CUDA_SPRING spring;
+//        __shared__ Vec temp, force;
+//
+//        int i = blockDim.x * blockIdx.x + threadIdx.x;
+//
+//        if (i < num_springs) {
+//            spring = *d_spring[i];
+//
+//            if (spring._left == nullptr || spring._right == nullptr || !spring._left->valid ||
+//                !spring._right->valid) // TODO might be expensive with CUDA instruction set
+//                return;
+//
+//            temp = (spring._right->pos) - (spring._left->pos);
+//
+//            double scale = 1.0;
+//            if (spring._type == ACTIVE_CONTRACT_THEN_EXPAND) {
+//                scale = (1 - 0.2 * sin(spring._omega * t));
+//            } else if (spring._type == ACTIVE_EXPAND_THEN_CONTRACT) {
+//                scale = (1 + 0.2 * sin(spring._omega * t));
+//            }
+//
+//            force = spring._k * (spring._rest * scale - temp.norm()) * (temp / temp.norm()); // normal spring force
+//            force += dot(spring._left->vel - spring._right->vel, temp / temp.norm()) * spring._damping *
+//                     (temp / temp.norm()); // damping
+//
+//            //use atomicCAS
+//            if (spring._right->constraints.fixed == false) {
+//                int oldValue = atomicCAS(&spring._right->force, spring._right->force, spring._right->force + force);
+//                if (oldValue == spring._right->force)
+//                    spring._right->force += force;
+//            }
+//            if (spring._left->constraints.fixed == false) {
+//                int oldValue = atomicCAS(&spring._left->force, spring._left->force, spring._left->force - force);
+//                if (oldValue == spring._left->force)
+//                    spring._left->force -= force;
+//            }
+//
+//        }
+//    }
+//
+//
+//    double Simulation::time() {
+//    return this -> T;
+//}
+
+
+
