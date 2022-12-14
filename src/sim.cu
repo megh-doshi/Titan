@@ -1056,7 +1056,8 @@ Vec Simulation::up;
 //
         // copy the required data from global memory to shared memory
 //        for (int i = threadIdx.x; i < num_springs_to_process; i += blockDim.x) {
-        spring_data[i] = *d_spring[i];
+        spring_data[threadIdx.x] = *d_spring[i];
+
 //        }
 //
 //        // synchronize the threads in the block
