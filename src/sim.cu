@@ -1609,12 +1609,12 @@ void Simulation::moveViewport(const Vec & displacement) {
             cudaEventRecord(start, 0);
 
 
-            computeSpringForces<<<springBlocksPerGrid, THREADS_PER_BLOCK, 288>>>(d_spring, springs.size(), T); // compute mass forces after syncing
+            computeSpringForces<<<springBlocksPerGrid, THREADS_PER_BLOCK, 36*sizeof(float)>>>(d_spring, springs.size(), T); // compute mass forces after syncing
             cudaEventRecord(stop,0);
             cudaEventSynchronize(stop);
             float time;
             cudaEventElapsedTime(&time, start, stop);
-            std::cout << "Copmute Spring Forces Kernel:" << time << std::endl;
+            std::cout << "Compute Spring Forces Kernel:" << time << std::endl;
 
             gpuErrchk( cudaPeekAtLastError() );
 
