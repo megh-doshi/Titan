@@ -1050,21 +1050,20 @@ Vec Simulation::up;
         // each block has 2 threads, one for each mass
         __shared__ CUDA_SPRING spring_data[2];
 
-            // calculate the number of springs to process
-            int num_springs_to_process = min(num_springs - blockIdx.x * blockDim.x, blockDim.x);
+        int i = blockDim.x * blockIdx.x + threadIdx.x;
 
-            // copy the required data from global memory to shared memory
-            for (int i = threadIdx.x; i < num_springs_to_process; i += blockDim.x) {
-                spring_data[i] = *d_spring[blockIdx.x * blockDim.x + i];
-            }
+        int num_springs_to_process = min(num_springs - blockIdx.x * blockDim.x, blockDim.x);
 
-            // synchronize the threads in the block
-            __syncthreads();
+        // copy the required data from global memory to shared memory
+        for (int i = threadIdx.x; i < num_springs_to_process; i += blockDim.x) {
+            spring_data[i] = *d_spring[blockIdx.x * blockDim.x + i];
+        }
 
-            // compute spring forces using data in shared memory
-            for (int i = threadIdx.x; i < num_springs_to_process; i++) {
-                CUDA_SPRING & spring = spring_data[i];
-                // rest of the kernel code
+        // synchronize the threads in the block
+        __syncthreads();
+
+        if ( i < num_springs ) {
+            CUDA_SPRING & spring = *d_spring[i];
 
 //            if (spring._left == nullptr || spring._right == nullptr || ! spring._left -> valid || ! spring._right -> valid) // TODO might be expensive with CUDA instruction set
 //                return;
