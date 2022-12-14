@@ -1148,36 +1148,39 @@ __global__ void printSpring(CUDA_SPRING ** d_springs, int num_springs) {
 
         int i = blockDim.x * blockIdx.x + threadIdx.x;
 
-        if ( i < num_springs ) {
+        if (i < num_springs) {
             spring = *d_spring[i];
 
-            if (spring._left == nullptr || spring._right == nullptr || ! spring._left -> valid || ! spring._right -> valid) // TODO might be expensive with CUDA instruction set
+            if (spring._left == nullptr || spring._right == nullptr || !spring._left->valid ||
+                !spring._right->valid) // TODO might be expensive with CUDA instruction set
                 return;
 
-            temp = (spring._right -> pos) - (spring._left -> pos);
+            temp = (spring._right->pos) - (spring._left->pos);
 
             double scale = 1.0;
-            if (spring._type == ACTIVE_CONTRACT_THEN_EXPAND){
+            if (spring._type == ACTIVE_CONTRACT_THEN_EXPAND) {
                 scale = (1 - 0.2 * sin(spring._omega * t));
-            } else if (spring._type == ACTIVE_EXPAND_THEN_CONTRACT){
+            } else if (spring._type == ACTIVE_EXPAND_THEN_CONTRACT) {
                 scale = (1 + 0.2 * sin(spring._omega * t));
             }
 
             force = spring._k * (spring._rest * scale - temp.norm()) * (temp / temp.norm()); // normal spring force
-            force += dot(spring._left -> vel - spring._right -> vel, temp / temp.norm()) * spring._damping * (temp / temp.norm()); // damping
+            force += dot(spring._left->vel - spring._right->vel, temp / temp.norm()) * spring._damping *
+                     (temp / temp.norm()); // damping
 
             //use atomicCAS
-            if (spring._right -> constraints.fixed == false) {
+            if (spring._right->constraints.fixed == false) {
                 int oldValue = atomicCAS(&spring._right->force, spring._right->force, spring._right->force + force);
                 if (oldValue == spring._right->force)
                     spring._right->force += force;
             }
-            if (spring._left -> constraints.fixed == false) {
+            if (spring._left->constraints.fixed == false) {
                 int oldValue = atomicCAS(&spring._left->force, spring._left->force, spring._left->force - force);
                 if (oldValue == spring._left->force)
                     spring._left->force -= force;
             }
 
+        }
     }
 
 
