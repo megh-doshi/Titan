@@ -1048,7 +1048,7 @@ Vec Simulation::up;
         // each thread computes the force on one mass
         // each block computes the force on one spring
         // each block has 2 threads, one for each mass
-        __shared__ CUDA_SPRING spring_data[];
+        __shared__ CUDA_SPRING & spring_data[];
 
         int i = blockDim.x * blockIdx.x + threadIdx.x;
 
