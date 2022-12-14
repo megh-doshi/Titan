@@ -1166,10 +1166,10 @@ __global__ void printSpring(CUDA_SPRING ** d_springs, int num_springs) {
             force += dot(spring[threadIdx.x]._left -> vel - spring[threadIdx.x]._right -> vel, temp / temp.norm()) * spring[threadIdx.x]._damping * (temp / temp.norm()); // damping
 
             if (spring[threadIdx.x]._right -> constraints.fixed == false) {
-                *d_spring[i]._right->force += force;
+                spring[threadIdx.x]._right->force += force;
             }
             if (spring[threadIdx.x]._left -> constraints.fixed == false) {
-                *d_spring[i]._left->force -= force;
+                spring[threadIdx.x]._left->force -= force;
             }
         }
     }
