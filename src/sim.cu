@@ -1050,7 +1050,7 @@ Vec Simulation::up;
         // each block has 2 threads, one for each mass
         __shared__ CUDA_SPRING spring_data[2];
 
-        int i = blockDim.x * blockIdx.x + threadIdx.x;
+
 
         int num_springs_to_process = min(num_springs - blockIdx.x * blockDim.x, blockDim.x);
 
@@ -1061,7 +1061,7 @@ Vec Simulation::up;
 
         // synchronize the threads in the block
         __syncthreads();
-
+        int i = blockDim.x * blockIdx.x + threadIdx.x;
         if ( i < num_springs ) {
             CUDA_SPRING & spring = *d_spring[i];
 
