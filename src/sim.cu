@@ -1084,13 +1084,13 @@ Vec Simulation::up;
             force += dot(spring_data[threadIdx.x]._left -> vel - spring_data[threadIdx.x]._right -> vel, temp / temp.norm()) * spring_data[threadIdx.x]._damping * (temp / temp.norm()); // damping
 
 #ifdef CONSTRAINTS
-            if (spring._right -> constraints.fixed == false) {
+            if (spring_data[threadIdx.x]._right -> constraints.fixed == false) {
             spring._right->force.atomicVecAdd(force); // need atomics here
 //            spring._right -> force.VecAdd(force);
 //            spring._right -> force += force;
         }
 
-        if (spring._left -> constraints.fixed == false) {
+        if (spring_data[threadIdx.x]._left -> constraints.fixed == false) {
             spring._left->force.atomicVecAdd(-force);
 //            spring._left -> force.VecAdd(-force);
 //            spring._left -> force -= force;
