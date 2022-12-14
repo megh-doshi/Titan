@@ -1667,13 +1667,13 @@ void Simulation::execute() {
         cudaDeviceSynchronize(); // synchronize before updating the springs and mass positions
                 
 #ifdef RK2
-        computeSpringForces<<<springBlocksPerGrid, THREADS_PER_BLOCK>>>(d_spring, springs.size(), T); // compute mass forces after syncing
+        computeSpringForces<<<springBlocksPerGrid, THREADS_PER_BLOCK,THREADS_PER_BLOCK*sizeof(d_spring)>>>(d_spring, springs.size(), T); // compute mass forces after syncing
         gpuErrchk( cudaPeekAtLastError() );
         massForcesAndUpdate<true><<<massBlocksPerGrid, THREADS_PER_BLOCK>>>(d_mass, masses.size(), dt, T, _global_acc, d_constraints);
         gpuErrchk( cudaPeekAtLastError() );
         T += 0.5 * dt;
 
-        computeSpringForces<<<springBlocksPerGrid, THREADS_PER_BLOCK>>>(d_spring, springs.size(), T); // compute mass forces after syncing
+        computeSpringForces<<<springBlocksPerGrid, THREADS_PER_BLOCK,THREADS_PER_BLOCK*sizeof(d_spring)>>>(d_spring, springs.size(), T); // compute mass forces after syncing
         gpuErrchk( cudaPeekAtLastError() );
         massForcesAndUpdate<false><<<massBlocksPerGrid, THREADS_PER_BLOCK>>>(d_mass, masses.size(), dt, T, _global_acc, d_constraints);
         gpuErrchk( cudaPeekAtLastError() );
